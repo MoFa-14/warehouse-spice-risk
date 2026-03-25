@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Overview</p>
+        <h2>Latest readings per pod</h2>
+    </div>
+</section>
+
+{% if readings %}
+<div class="card-grid">
+    {% for reading in readings %}
+    <article class="metric-card">
+        <div class="card-head">
+            <div>
+                <p class="card-label">Pod {{ reading.pod_id }}</p>
+                <h3>Current storage state</h3>
+            </div>
+            {% if reading.status %}
+            <span class="status-badge {{ reading.status.css_class }}">{{ reading.status.short_label }}</span>
+            {% else %}
+            <span class="status-badge status-muted">No data</span>
+            {% endif %}
+        </div>
+        <dl class="reading-grid">
+            <div>
+                <dt>Last update</dt>
+                <dd>{{ reading.ts_pc_utc|fmt_ts }}</dd>
+            </div>
+            <div>
+                <dt>Temperature</dt>
+                <dd>{{ reading.temp_c|fmt_num }} C</dd>
+            </div>
+            <div>
+                <dt>Humidity</dt>
+                <dd>{{ reading.rh_pct|fmt_num }}%</dd>
+            </div>
+            <div>
+                <dt>Dew point</dt>
+                <dd>{{ reading.dew_point_c|fmt_num }} C</dd>
+            </div>
+            <div>
+                <dt>Source</dt>
+                <dd>{{ reading.data_source|capitalize }}</dd>
+            </div>
+        </dl>
+        {% if reading.status %}
+        <p class="card-message">{{ reading.status.description }}</p>
+        <p class="card-recommendation">{{ reading.status.recommendation }}</p>
+        {% endif %}
+        <div class="card-actions">
+            <a class="button-link" href="{{ url_for('pod_detail', pod_id=reading.pod_id) }}">View pod</a>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% else %}
+<section class="empty-state">
+    <h3>No pod data available</h3>
+    <p>Raw pod CSV files were not found under <code>data/raw/pods</code>.</p>
+</section>
+{% endif %}
+{% endblock %}

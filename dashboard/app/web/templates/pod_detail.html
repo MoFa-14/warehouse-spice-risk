@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Pod Detail</p>
+        <h2>Pod {{ reading.pod_id }}</h2>
+    </div>
+    {% if reading.status %}
+    <span class="status-badge {{ reading.status.css_class }}">{{ reading.status.level_label }}</span>
+    {% endif %}
+</section>
+
+<section class="hero-panel">
+    <div class="hero-stats">
+        <div>
+            <span>Last update</span>
+            <strong>{{ reading.ts_pc_utc|fmt_ts }}</strong>
+        </div>
+        <div>
+            <span>Temperature</span>
+            <strong>{{ reading.temp_c|fmt_num }} C</strong>
+        </div>
+        <div>
+            <span>Humidity</span>
+            <strong>{{ reading.rh_pct|fmt_num }}%</strong>
+        </div>
+        <div>
+            <span>Dew point</span>
+            <strong>{{ reading.dew_point_c|fmt_num }} C</strong>
+        </div>
+    </div>
+    {% if reading.status %}
+    <div class="hero-message">
+        <p>{{ reading.status.description }}</p>
+        <p>{{ reading.status.recommendation }}</p>
+    </div>
+    {% endif %}
+</section>
+
+<section class="controls-panel">
+    <div class="preset-links">
+        {% for value, label in preset_ranges %}
+        <a class="range-chip {% if charts.window.key == value %}active{% endif %}" href="{{ url_for('pod_detail', pod_id=reading.pod_id, range=value) }}">{{ label }}</a>
+        {% endfor %}
+    </div>
+    <form class="custom-range-form" method="get">
+        <input type="hidden" name="range" value="custom">
+        <label>
+            Start (UTC)
+            <input type="datetime-local" name="start" value="{{ custom_start }}">
+        </label>
+        <label>
+            End (UTC)
+            <input type="datetime-local" name="end" value="{{ custom_end }}">
+        </label>
+        <button type="submit">Apply</button>
+    </form>
+</section>
+
+<section class="legend-panel">
+    <h3>Threshold legend</h3>
+    <div class="legend-grid">
+        {% for item in threshold_legend %}
+        <article>
+            <h4>{{ item.metric }}</h4>
+            <p>{{ item.range }}</p>
+            <small>{{ item.note }}</small>
+        </article>
+        {% endfor %}
+    </div>
+</section>
+
+{% if charts.has_data %}
+<script>{{ charts.plotly_js|safe }}</script>
+<div class="chart-grid">
+    <section class="chart-card">{{ charts.temp_chart|safe }}</section>
+    <section class="chart-card">{{ charts.rh_chart|safe }}</section>
+    {% if charts.dew_chart %}
+    <section class="chart-card chart-card-wide">{{ charts.dew_chart|safe }}</section>
+    {% endif %}
+</div>
+{% else %}
+<section class="empty-state">
+    <h3>No data for this period.</h3>
+    <p>Try a wider range or verify that CSV files exist for the selected pod.</p>
+</section>
+{% endif %}
+{% endblock %}

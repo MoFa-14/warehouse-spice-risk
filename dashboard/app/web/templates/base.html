@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ page_title }} | Warehouse Spice Risk</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="site-header">
+            <div>
+                <p class="eyebrow">Warehouse Spice Risk</p>
+                <h1>Storage Dashboard</h1>
+                <p class="subtitle">Live CSV-backed visibility for temperature, humidity, quality, and rule-based alerts.</p>
+            </div>
+            <nav class="site-nav">
+                <a href="{{ url_for('index') }}">Overview</a>
+                <a href="{{ url_for('health') }}">Health</a>
+                <a href="{{ url_for('alerts') }}">Alerts</a>
+                <a href="{{ url_for('prediction') }}">Prediction</a>
+            </nav>
+        </header>
+
+        {% if alert_banner and alert_banner.count %}
+        <section class="alert-banner {{ alert_banner.css_class }}">
+            <strong>{{ alert_banner.worst_label }}</strong>
+            <span>{{ alert_banner.message }}</span>
+            <a href="{{ url_for('alerts') }}">Open alerts</a>
+        </section>
+        {% endif %}
+
+        <main class="page-content">
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

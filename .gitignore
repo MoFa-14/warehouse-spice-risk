@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
 .DS_Store
 Thumbs.db
 .venv/
@@ -18,3 +19,19 @@ code.py.bak
 # Keep only a placeholder for local CircuitPython library bundles
 firmware/circuitpython-pod/lib/*
 !firmware/circuitpython-pod/lib/.gitkeep
+
+# Gateway runtime outputs
+gateway/logs/*.csv
+!gateway/logs/.gitkeep
+
+data/raw/**
+!data/raw/.gitkeep
+data/processed/**
+!data/processed/.gitkeep
+data/exports/**
+!data/exports/.gitkeep
+!data/.gitkeep
+
+dashboard/app/runtime/*.json
+!dashboard/app/runtime/.gitkeep
+dashboard/app/runtime/*.log

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "warehouse-spice-risk-gateway"
+version = "0.1.0"
+description = "Layer 2 BLE gateway for Warehouse Spice Risk pods."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "bleak>=2.0,<3.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
