@@ -9,6 +9,7 @@ from typing import Any, Iterable, Mapping
 
 from gateway.protocol.decoder import TelemetryRecord
 from gateway.storage.paths import StoragePaths, build_storage_paths
+from gateway.storage.sample_csv import build_sample_row, ensure_sample_csv_schema
 from gateway.storage.schema import RAW_SAMPLE_COLUMNS, QualityFlag, has_quality_flag, parse_quality_mask, quality_flags_to_mask
 from gateway.utils.timeutils import parse_utc_iso
 
@@ -66,6 +67,7 @@ class RawTelemetryWriter:
         """Append one raw sample row unless the sequence is already stored."""
         day = parse_utc_iso(ts_pc_utc).date()
         path = self.paths.raw_pod_day_path(record.pod_id, day)
+        ensure_sample_csv_schema(path, RAW_SAMPLE_COLUMNS)
         seen_sequences = self._load_seen_sequences(path)
         quality_mask = quality_flags_to_mask(quality_flags)
 
@@ -76,17 +78,12 @@ class RawTelemetryWriter:
             return RawWriteResult(inserted=False, duplicate=True, path=path)
 
         self._writer_for(path).write_row(
-            {
-                "ts_pc_utc": ts_pc_utc,
-                "pod_id": record.pod_id,
-                "seq": record.seq,
-                "ts_uptime_s": record.ts_uptime_s,
-                "temp_c": record.temp_c,
-                "rh_pct": record.rh_pct,
-                "flags": record.flags,
-                "rssi": rssi,
-                "quality_flags": quality_mask,
-            }
+            build_sample_row(
+                ts_pc_utc=ts_pc_utc,
+                record=record,
+                rssi=rssi,
+                quality_flags=quality_mask,
+            )
         )
         seen_sequences.add(record.seq)
         return RawWriteResult(inserted=True, duplicate=False, path=path)
@@ -99,6 +96,7 @@ class RawTelemetryWriter:
     def _writer_for(self, path: Path) -> CsvAppendWriter:
         writer = self._writers.get(path)
         if writer is None:
+            ensure_sample_csv_schema(path, RAW_SAMPLE_COLUMNS)
             writer = CsvAppendWriter(path, RAW_SAMPLE_COLUMNS)
             self._writers[path] = writer
         return writer
@@ -108,6 +106,7 @@ class RawTelemetryWriter:
         if seen is not None:
             return seen
 
+        ensure_sample_csv_schema(path, RAW_SAMPLE_COLUMNS)
         seen = set()
         if path.exists() and path.stat().st_size > 0:
             with path.open("r", encoding="utf-8", newline="") as handle:

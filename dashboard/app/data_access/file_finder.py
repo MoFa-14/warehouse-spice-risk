@@ -7,11 +7,14 @@ from pathlib import Path
 
 
 def discover_pod_ids(data_root: Path) -> list[str]:
-    """Return pod ids discovered under data/raw/pods."""
-    pods_root = Path(data_root) / "raw" / "pods"
-    if not pods_root.exists():
-        return []
-    return sorted(path.name for path in pods_root.iterdir() if path.is_dir())
+    """Return pod ids discovered under raw and processed pod folders."""
+    roots = [Path(data_root) / "raw" / "pods", Path(data_root) / "processed" / "pods"]
+    pod_ids: set[str] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        pod_ids.update(path.name for path in root.iterdir() if path.is_dir())
+    return sorted(pod_ids)
 
 
 def find_raw_pod_files(

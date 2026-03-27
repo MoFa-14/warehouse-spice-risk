@@ -19,13 +19,15 @@
             </div>
             {% if reading.status %}
             <span class="status-badge {{ reading.status.css_class }}">{{ reading.status.short_label }}</span>
+            {% elif reading.has_measurement %}
+            <span class="status-badge status-muted">No alert</span>
             {% else %}
-            <span class="status-badge status-muted">No data</span>
+            <span class="status-badge status-muted">Incomplete</span>
             {% endif %}
         </div>
         <dl class="reading-grid">
             <div>
-                <dt>Last update</dt>
+                <dt>Last sample</dt>
                 <dd>{{ reading.ts_pc_utc|fmt_ts }}</dd>
             </div>
             <div>
@@ -48,6 +50,11 @@
         {% if reading.status %}
         <p class="card-message">{{ reading.status.description }}</p>
         <p class="card-recommendation">{{ reading.status.recommendation }}</p>
+        {% elif not reading.has_measurement %}
+        <p class="card-message">Latest sample did not include sensor values.</p>
+        {% if reading.last_complete_ts_pc_utc and reading.last_complete_ts_pc_utc != reading.ts_pc_utc %}
+        <p class="card-recommendation">Last complete measurement: {{ reading.last_complete_ts_pc_utc|fmt_ts }}</p>
+        {% endif %}
         {% endif %}
         <div class="card-actions">
             <a class="button-link" href="{{ url_for('pod_detail', pod_id=reading.pod_id) }}">View pod</a>
@@ -58,7 +65,7 @@
 {% else %}
 <section class="empty-state">
     <h3>No pod data available</h3>
-    <p>Raw pod CSV files were not found under <code>data/raw/pods</code>.</p>
+    <p>Pod CSV files were not found under <code>data/raw/pods</code> or <code>data/processed/pods</code>.</p>
 </section>
 {% endif %}
 {% endblock %}

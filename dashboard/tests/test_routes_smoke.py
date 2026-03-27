@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import math
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -25,11 +26,12 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         runtime_dir.mkdir(parents=True, exist_ok=True)
         now = datetime.now(timezone.utc).replace(microsecond=0)
         day = now.date().isoformat()
+        dew_point = self._dew_point_c(25.2, 65.0)
 
         with (self.data_root / "raw" / "pods" / "01" / f"{day}.csv").open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
-            writer.writerow(["ts_pc_utc", "pod_id", "seq", "ts_uptime_s", "temp_c", "rh_pct", "flags", "rssi", "quality_flags"])
-            writer.writerow([now.isoformat().replace("+00:00", "Z"), "01", 1, 5.0, 25.2, 65.0, 0, -43, 0])
+            writer.writerow(["ts_pc_utc", "pod_id", "seq", "ts_uptime_s", "temp_c", "rh_pct", "dew_point_c", "flags", "rssi", "quality_flags"])
+            writer.writerow([now.isoformat().replace("+00:00", "Z"), "01", 1, 5.0, 25.2, 65.0, f"{dew_point:.6f}", 0, -43, 0])
 
         with (self.data_root / "raw" / "link_quality" / f"{day}.csv").open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
@@ -46,6 +48,7 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
             }
         )
         self.client = self.app.test_client()
+        self.expected_dew_text = f"{dew_point:.2f}".encode()
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
@@ -56,10 +59,20 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200, route)
 
     def test_pages_render_expected_text(self) -> None:
-        self.assertIn(b"Pod 01", self.client.get("/").data)
-        self.assertIn(b"Temperature vs Time", self.client.get("/pods/01").data)
+        overview = self.client.get("/").data
+        detail = self.client.get("/pods/01").data
+        self.assertIn(b"Pod 01", overview)
+        self.assertIn(self.expected_dew_text, overview)
+        self.assertIn(b"Temperature vs Time", detail)
+        self.assertIn(b"Dew Point vs Time", detail)
+        self.assertIn(self.expected_dew_text, detail)
         self.assertIn(b"CRITICAL", self.client.get("/alerts").data)
         self.assertIn(b"Not implemented yet", self.client.get("/prediction").data)
+
+    def test_dashboard_includes_auto_refresh_meta_tag(self) -> None:
+        response = self.client.get("/")
+        self.assertIn(b'http-equiv="refresh"', response.data)
+        self.assertIn(b'content="5"', response.data)
 
     def test_acknowledge_post_redirects_back_to_alerts(self) -> None:
         alerts_page = self.client.get("/alerts")
@@ -73,6 +86,13 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
             follow_redirects=True,
         )
         self.assertEqual(response.status_code, 200)
+
+    @staticmethod
+    def _dew_point_c(temp_c: float, rh_pct: float) -> float:
+        rh = max(1e-6, min(rh_pct, 100.0)) / 100.0
+        a, b = 17.62, 243.12
+        gamma = (a * temp_c / (b + temp_c)) + math.log(rh)
+        return (b * gamma) / (a - gamma)
 
 
 if __name__ == "__main__":

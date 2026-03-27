@@ -6,13 +6,11 @@ import math
 
 
 def dew_point_c(temp_c: float | None, rh_pct: float | None) -> float | None:
-    """Compute dew point in Celsius using the Magnus approximation."""
+    """Compute dew point in Celsius using the requested Magnus approximation."""
     if temp_c is None or rh_pct is None:
         return None
-    if rh_pct <= 0.0:
-        return None
 
-    a = 17.625
-    b = 243.04
-    gamma = math.log(rh_pct / 100.0) + (a * temp_c) / (b + temp_c)
+    rh = max(1e-6, min(rh_pct, 100.0)) / 100.0
+    a, b = 17.62, 243.12
+    gamma = (a * temp_c / (b + temp_c)) + math.log(rh)
     return (b * gamma) / (a - gamma)

@@ -106,6 +106,7 @@ Raw telemetry columns:
 - `ts_uptime_s`
 - `temp_c`
 - `rh_pct`
+- `dew_point_c`
 - `flags`
 - `rssi`
 - `quality_flags`
@@ -124,6 +125,43 @@ Link-quality columns:
 - `missing_rate`
 
 The canonical raw writers are append-only, line-buffered, and dedupe repeated `(pod_id, seq)` rows before writing.
+
+## Writer Queue Architecture
+
+The live gateway no longer writes CSV rows directly from the BLE notification callback.
+
+- BLE notifications decode into structured telemetry records first.
+- The BLE session then pushes those records into an in-process `asyncio.Queue`.
+- A dedicated writer task consumes that queue and persists:
+  - canonical raw pod partitions under `data/raw/...`
+  - canonical link snapshots under `data/raw/link_quality/...`
+  - compatibility logs under `gateway/logs/samples.csv` and `gateway/logs/link_quality.csv`
+
+This separation matters for reliability on Windows: if a file write fails temporarily because of antivirus, indexing, or a transient file lock, the writer keeps retrying without killing the BLE notification path.
+
+The writer runs with these safety behaviors:
+
+- append mode only
+- headers created automatically
+- flush after every row
+- full exception logging with stack traces
+- automatic close, brief sleep, reopen, and retry on write errors
+- heartbeat log every 10 seconds with queue and write counters
+
+Example heartbeat:
+
+```text
+writer alive rows_written=128 write_errors=0 queue_size=0 last_write=2026-03-27T14:05:10Z
+```
+
+Interpretation:
+
+- `rows_written`: canonical rows successfully appended by the writer
+- `write_errors`: total write exceptions seen so far
+- `queue_size`: backlog waiting to be flushed
+- `last_write`: UTC timestamp of the last successful canonical append
+
+If `telemetry ...` logs continue but `last_write` stops moving and `queue_size` grows, BLE is still receiving data and the writer is retrying a file problem.
 
 ## Why Raw Data Stays Immutable
 
@@ -195,6 +233,13 @@ More advanced feature engineering should stay in the later ML layer.
 - `missing_rate`: `total_missing / (total_received + total_missing)`
 - `last_rssi`: most recent RSSI the adapter exposed through scan data
 
+## Reliability Features
+
+- The gateway holds a lock file at `gateway/logs/.lock` so only one process writes the same log directory at a time.
+- If notifications stall while the BLE connection still looks alive, the telemetry watchdog logs a warning, forces a notify resubscribe, and then reconnects the client if telemetry still does not resume.
+- Writer failures are never silent. The writer prints full exceptions and keeps retrying.
+- If repeated writer failures happen in a short window, the gateway prints a `WRITER RED FLAG` message and continues retrying.
+
 ## Windows BLE Cache Notes
 
 Windows can cache old GATT layouts for the same BLE address. This gateway defaults to uncached service discovery so it re-reads the pod's GATT layout on connect.
@@ -214,3 +259,14 @@ If you intentionally want to trust the cached GATT layout, add `--use-cached-ser
 - The gateway reconnects with exponential backoff: 1s, 2s, 4s, up to 30s.
 - If the pod reboots and its sequence counter restarts, the gateway clears its dedupe window and continues logging.
 - The canonical Layer 3 store is CSV-first by design. A future SQLite option can be revisited later, but it is intentionally not part of this phase.
+
+## Troubleshooting Checklist
+
+If CSV rows stop appearing or the gateway exits with a log-directory warning:
+
+1. Check whether another gateway process is already running and holding `gateway/logs/.lock`.
+2. Watch the console for `writer alive ...` heartbeat logs.
+3. If `queue_size` keeps rising, look for antivirus, OneDrive, backup software, or another tool touching the CSV files.
+4. If telemetry warnings mention resubscribe or reconnect, reset the pod once and confirm the gateway reconnects.
+5. Avoid opening the CSV files in a tool that may keep an exclusive lock.
+6. If Windows BLE looks stale, remove the pod from Bluetooth settings and reconnect.

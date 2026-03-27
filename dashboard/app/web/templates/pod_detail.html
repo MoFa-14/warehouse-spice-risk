@@ -8,13 +8,17 @@
     </div>
     {% if reading.status %}
     <span class="status-badge {{ reading.status.css_class }}">{{ reading.status.level_label }}</span>
+    {% elif reading.has_measurement %}
+    <span class="status-badge status-muted">No alert</span>
+    {% else %}
+    <span class="status-badge status-muted">Incomplete</span>
     {% endif %}
 </section>
 
 <section class="hero-panel">
     <div class="hero-stats">
         <div>
-            <span>Last update</span>
+            <span>Last sample</span>
             <strong>{{ reading.ts_pc_utc|fmt_ts }}</strong>
         </div>
         <div>
@@ -34,6 +38,13 @@
     <div class="hero-message">
         <p>{{ reading.status.description }}</p>
         <p>{{ reading.status.recommendation }}</p>
+    </div>
+    {% elif not reading.has_measurement %}
+    <div class="hero-message">
+        <p>Latest sample did not include sensor values.</p>
+        {% if reading.last_complete_ts_pc_utc and reading.last_complete_ts_pc_utc != reading.ts_pc_utc %}
+        <p>Last complete measurement: {{ reading.last_complete_ts_pc_utc|fmt_ts }}</p>
+        {% endif %}
     </div>
     {% endif %}
 </section>

@@ -24,6 +24,22 @@ class PodLatestReading:
     dew_point_c: float | None
     data_source: str
     status: ClassificationResult | None
+    has_measurement: bool
+    last_complete_ts_pc_utc: datetime | None
+
+
+@dataclass(frozen=True)
+class _ReadingCandidate:
+    pod_id: str
+    ts_pc_utc: datetime
+    temp_c: float | None
+    rh_pct: float | None
+    dew_point_c: float | None
+    data_source: str
+
+    @property
+    def has_measurement(self) -> bool:
+        return any(value is not None for value in (self.temp_c, self.rh_pct, self.dew_point_c))
 
 
 def discover_dashboard_pods(data_root: Path) -> list[str]:
@@ -45,47 +61,35 @@ def get_latest_pod_readings(data_root: Path) -> list[PodLatestReading]:
 def get_latest_pod_reading(data_root: Path, pod_id: str) -> PodLatestReading | None:
     """Return the preferred latest reading for a single pod."""
     raw_files = find_raw_pod_files(Path(data_root), pod_id)
-    if not raw_files:
-        return None
-
     processed_files = find_processed_pod_files(Path(data_root), pod_id)
+    raw_frame = read_raw_samples(raw_files[-3:]) if raw_files else pd.DataFrame()
     processed_frame = read_processed_samples(processed_files[-3:]) if processed_files else pd.DataFrame()
-    raw_frame = read_raw_samples(raw_files[-3:])
 
-    processed_candidate = _latest_processed_row(processed_frame)
-    raw_candidate = _latest_raw_row(raw_frame)
-
-    if processed_candidate is not None:
-        temp_c = _optional_float(processed_candidate.get("temp_c_clean"))
-        rh_pct = _optional_float(processed_candidate.get("rh_pct_clean"))
-        dew_point_c = _optional_float(processed_candidate.get("dew_point_c"))
-        timestamp = processed_candidate["ts_pc_utc"]
-        status = classify_storage_conditions(temp_c, rh_pct)
-        return PodLatestReading(
-            pod_id=pod_id,
-            ts_pc_utc=timestamp.to_pydatetime(),
-            temp_c=temp_c,
-            rh_pct=rh_pct,
-            dew_point_c=dew_point_c,
-            data_source="processed",
-            status=status,
+    current_candidates = [
+        candidate
+        for candidate in (
+            _candidate_from_raw_row(_latest_row(raw_frame)),
+            _candidate_from_processed_row(_latest_processed_row(processed_frame)),
         )
-
-    if raw_candidate is None:
+        if candidate is not None
+    ]
+    if not current_candidates:
         return None
 
-    temp_c = _optional_float(raw_candidate.get("temp_c"))
-    rh_pct = _optional_float(raw_candidate.get("rh_pct"))
-    timestamp = raw_candidate["ts_pc_utc"]
-    status = classify_storage_conditions(temp_c, rh_pct)
+    current = max(current_candidates, key=lambda item: (item.ts_pc_utc, item.data_source == "processed"))
+    last_complete = _latest_complete_candidate(raw_frame, processed_frame)
+    status = classify_storage_conditions(current.temp_c, current.rh_pct)
+
     return PodLatestReading(
-        pod_id=pod_id,
-        ts_pc_utc=timestamp.to_pydatetime(),
-        temp_c=temp_c,
-        rh_pct=rh_pct,
-        dew_point_c=None,
-        data_source="raw",
+        pod_id=current.pod_id,
+        ts_pc_utc=current.ts_pc_utc,
+        temp_c=current.temp_c,
+        rh_pct=current.rh_pct,
+        dew_point_c=current.dew_point_c,
+        data_source=current.data_source,
         status=status,
+        has_measurement=current.has_measurement,
+        last_complete_ts_pc_utc=None if last_complete is None else last_complete.ts_pc_utc,
     )
 
 
@@ -98,16 +102,70 @@ def _latest_processed_row(frame: pd.DataFrame):
         (candidate["missing"].fillna(1) == 0)
         | candidate["temp_c_clean"].notna()
         | candidate["rh_pct_clean"].notna()
+        | candidate["dew_point_c"].notna()
     ]
     if candidate.empty:
         return None
-    return candidate.sort_values("ts_pc_utc").iloc[-1]
+    return candidate.iloc[-1]
 
 
-def _latest_raw_row(frame: pd.DataFrame):
+def _latest_row(frame: pd.DataFrame):
     if frame.empty:
         return None
-    return frame.sort_values("ts_pc_utc").iloc[-1]
+    return frame.iloc[-1]
+
+
+def _latest_complete_candidate(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> _ReadingCandidate | None:
+    candidates = [
+        candidate
+        for candidate in (
+            _candidate_from_raw_row(_latest_measurement_row(raw_frame)),
+            _candidate_from_processed_row(_latest_processed_row(processed_frame)),
+        )
+        if candidate is not None and candidate.has_measurement
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: (item.ts_pc_utc, item.data_source == "processed"))
+
+
+def _latest_measurement_row(frame: pd.DataFrame):
+    if frame.empty:
+        return None
+    candidate = frame[
+        frame["temp_c"].notna()
+        | frame["rh_pct"].notna()
+        | frame["dew_point_c"].notna()
+    ]
+    if candidate.empty:
+        return None
+    return candidate.iloc[-1]
+
+
+def _candidate_from_raw_row(row) -> _ReadingCandidate | None:
+    if row is None:
+        return None
+    return _ReadingCandidate(
+        pod_id=str(row.get("pod_id", "")),
+        ts_pc_utc=row["ts_pc_utc"].to_pydatetime(),
+        temp_c=_optional_float(row.get("temp_c")),
+        rh_pct=_optional_float(row.get("rh_pct")),
+        dew_point_c=_optional_float(row.get("dew_point_c")),
+        data_source="raw",
+    )
+
+
+def _candidate_from_processed_row(row) -> _ReadingCandidate | None:
+    if row is None:
+        return None
+    return _ReadingCandidate(
+        pod_id=str(row.get("pod_id", "")),
+        ts_pc_utc=row["ts_pc_utc"].to_pydatetime(),
+        temp_c=_optional_float(row.get("temp_c_clean")),
+        rh_pct=_optional_float(row.get("rh_pct_clean")),
+        dew_point_c=_optional_float(row.get("dew_point_c")),
+        data_source="processed",
+    )
 
 
 def _optional_float(value) -> float | None:

@@ -9,6 +9,7 @@ from typing import Any, Mapping
 from gateway.link.stats import LinkSnapshot
 from gateway.protocol.decoder import TelemetryRecord
 from gateway.protocol.validation import format_quality_flags
+from gateway.storage.sample_csv import build_sample_row, ensure_sample_csv_schema
 
 
 SAMPLE_COLUMNS = [
@@ -18,6 +19,7 @@ SAMPLE_COLUMNS = [
     "ts_uptime_s",
     "temp_c",
     "rh_pct",
+    "dew_point_c",
     "flags",
     "rssi",
     "quality_flags",
@@ -66,6 +68,7 @@ class GatewayCsvLogger:
 
     def __init__(self, log_dir: Path) -> None:
         self.log_dir = log_dir
+        ensure_sample_csv_schema(log_dir / "samples.csv", SAMPLE_COLUMNS)
         self.samples = CsvAppendLogger(log_dir / "samples.csv", SAMPLE_COLUMNS)
         self.link_quality = CsvAppendLogger(log_dir / "link_quality.csv", LINK_COLUMNS)
 
@@ -78,17 +81,12 @@ class GatewayCsvLogger:
         quality_flags: tuple[str, ...] | list[str],
     ) -> None:
         self.samples.write_row(
-            {
-                "ts_pc_utc": ts_pc_utc,
-                "pod_id": record.pod_id,
-                "seq": record.seq,
-                "ts_uptime_s": record.ts_uptime_s,
-                "temp_c": record.temp_c,
-                "rh_pct": record.rh_pct,
-                "flags": record.flags,
-                "rssi": rssi,
-                "quality_flags": format_quality_flags(tuple(quality_flags)),
-            }
+            build_sample_row(
+                ts_pc_utc=ts_pc_utc,
+                record=record,
+                rssi=rssi,
+                quality_flags=format_quality_flags(tuple(quality_flags)),
+            )
         )
 
     def log_link_snapshot(self, snapshot: LinkSnapshot) -> None:

@@ -80,6 +80,7 @@ This is a lightweight UI-only mute for 30 minutes by default. It does not affect
 ## Notes
 
 - Alerts are rule-based only in this phase.
-- Dew point is displayed when processed CSV files provide it.
+- Dew point is displayed from raw CSVs when present, with processed CSVs used as a fallback.
+- If the newest sample is incomplete, the dashboard shows the latest sample timestamp and also shows the last complete measurement timestamp for context.
 - Dew point does not generate alerts yet.
 - Prediction is placeholder-only and no ML code is included.

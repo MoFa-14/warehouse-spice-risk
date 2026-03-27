@@ -6,6 +6,7 @@ import argparse
 import asyncio
 import contextlib
 import logging
+from collections.abc import Awaitable
 from typing import Sequence
 
 from bleak import BleakClient
@@ -14,9 +15,10 @@ from gateway.ble.client import PodSession, PodTarget
 from gateway.ble.gatt import ensure_profile_present, iter_service_lines, profile_from_firmware
 from gateway.ble.scanner import discover_matches, resolve_device
 from gateway.config import GatewaySettings, build_settings
-from gateway.logging.csv_logger import GatewayCsvLogger
+from gateway.logging.process_lock import GatewayProcessLock
+from gateway.logging.writer_pipeline import GatewayWriterPipeline
 from gateway.protocol.decoder import TelemetryRecord
-from gateway.storage import LinkQualityWriter, RawTelemetryWriter, build_storage_paths
+from gateway.storage import build_storage_paths
 from gateway.utils.timeutils import utc_now_iso
 
 
@@ -174,11 +176,11 @@ class GatewayRuntime:
         self.settings = settings
         self.profile = profile_from_firmware(settings.firmware)
         self.storage_paths = build_storage_paths()
-        self.legacy_csv_logger: GatewayCsvLogger | None = None
-        self.raw_writer: RawTelemetryWriter | None = None
-        self.link_writer: LinkQualityWriter | None = None
+        self.writer_pipeline: GatewayWriterPipeline | None = None
+        self.process_lock = GatewayProcessLock(self.settings.log_dir / ".lock")
         self.sessions: list[PodSession] = []
         self._stop_event = asyncio.Event()
+        self._fatal_task_error: BaseException | None = None
 
     async def run(self, duration_s: float | None) -> int:
         """Run the receiver until the duration elapses or the user stops it."""
@@ -186,37 +188,52 @@ class GatewayRuntime:
         LOGGER.info("Legacy logs will be written to %s", self.settings.log_dir)
         LOGGER.info("Canonical Layer 3 data root: %s", self.storage_paths.root)
         LOGGER.info("Requested pod sample interval: %ss", self.settings.firmware.sample_interval_s)
-        targets = await resolve_initial_targets(self.settings)
-        if not targets:
-            LOGGER.warning("No matching pods found to connect.")
+        try:
+            self.process_lock.acquire()
+        except RuntimeError as exc:
+            LOGGER.error("%s", exc)
             return 1
 
-        self.raw_writer = RawTelemetryWriter(self.storage_paths.root)
-        self.link_writer = LinkQualityWriter(self.storage_paths.root)
-        self.legacy_csv_logger = GatewayCsvLogger(self.settings.log_dir)
-        self.sessions = [
-            PodSession(
-                target=target,
-                settings=self.settings,
-                profile=self.profile,
-                sample_handler=self.handle_sample,
-            )
-            for target in targets
-        ]
-        LOGGER.info("Starting %s pod session(s)", len(self.sessions))
-
-        session_tasks = [
-            asyncio.create_task(session.run(), name=f"pod-session-{index}")
-            for index, session in enumerate(self.sessions, start=1)
-        ]
-        snapshot_task = asyncio.create_task(self.link_snapshot_loop(), name="link-snapshot-loop")
-        rssi_task = asyncio.create_task(self.rssi_poll_loop(), name="rssi-poll-loop")
-
         try:
+            session_tasks: list[asyncio.Task[None]] = []
+            snapshot_task: asyncio.Task[None] | None = None
+            rssi_task: asyncio.Task[None] | None = None
+
+            targets = await resolve_initial_targets(self.settings)
+            if not targets:
+                LOGGER.warning("No matching pods found to connect.")
+                return 1
+
+            self.writer_pipeline = GatewayWriterPipeline(
+                storage_root=self.storage_paths.root,
+                log_dir=self.settings.log_dir,
+            )
+            self.writer_pipeline.start()
+            self.sessions = [
+                PodSession(
+                    target=target,
+                    settings=self.settings,
+                    profile=self.profile,
+                    sample_handler=self.handle_sample,
+                )
+                for target in targets
+            ]
+            LOGGER.info("Starting %s pod session(s)", len(self.sessions))
+
+            session_tasks = [
+                self._create_guarded_task(session.run(), name=f"pod-session-{index}")
+                for index, session in enumerate(self.sessions, start=1)
+            ]
+            snapshot_task = self._create_guarded_task(self.link_snapshot_loop(), name="link-snapshot-loop")
+            rssi_task = self._create_guarded_task(self.rssi_poll_loop(), name="rssi-poll-loop")
+
             if duration_s is None:
-                await asyncio.Event().wait()
+                await self._stop_event.wait()
             else:
-                await asyncio.sleep(duration_s)
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=duration_s)
+                except asyncio.TimeoutError:
+                    pass
         except asyncio.CancelledError:
             pass
         finally:
@@ -224,20 +241,20 @@ class GatewayRuntime:
             for session in self.sessions:
                 await session.stop()
             for background_task in (snapshot_task, rssi_task):
-                background_task.cancel()
+                if background_task is not None:
+                    background_task.cancel()
             for background_task in (snapshot_task, rssi_task):
-                with contextlib.suppress(asyncio.CancelledError):
-                    await background_task
-            await asyncio.gather(*session_tasks, return_exceptions=True)
-            self.log_link_snapshots()
-            if self.legacy_csv_logger is not None:
-                self.legacy_csv_logger.close()
-            if self.raw_writer is not None:
-                self.raw_writer.close()
-            if self.link_writer is not None:
-                self.link_writer.close()
+                if background_task is not None:
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await background_task
+            if session_tasks:
+                await asyncio.gather(*session_tasks, return_exceptions=True)
+            await self.log_link_snapshots()
+            if self.writer_pipeline is not None:
+                await self.writer_pipeline.stop()
+            self.process_lock.release()
 
-        return 0
+        return 1 if self._fatal_task_error is not None else 0
 
     async def handle_sample(
         self,
@@ -247,27 +264,15 @@ class GatewayRuntime:
         timestamp: str,
     ) -> None:
         """Persist a decoded sample into both canonical and compatibility outputs."""
-        if self.raw_writer is None:
+        if self.writer_pipeline is None:
             return
 
-        write_result = self.raw_writer.write_sample(
+        await self.writer_pipeline.enqueue_sample(
             ts_pc_utc=timestamp,
             record=record,
             rssi=stats.last_rssi,
             quality_flags=quality_flags,
         )
-        if write_result.duplicate:
-            stats.note_duplicate()
-            LOGGER.debug("Canonical storage skipped duplicate pod_id=%s seq=%s", record.pod_id, record.seq)
-            return
-
-        if self.legacy_csv_logger is not None:
-            self.legacy_csv_logger.log_sample(
-                ts_pc_utc=timestamp,
-                record=record,
-                rssi=stats.last_rssi,
-                quality_flags=quality_flags,
-            )
 
     async def link_snapshot_loop(self) -> None:
         """Write periodic link metrics snapshots for every pod."""
@@ -275,7 +280,7 @@ class GatewayRuntime:
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.settings.metrics_interval_s)
             except asyncio.TimeoutError:
-                self.log_link_snapshots()
+                await self.log_link_snapshots()
 
     async def rssi_poll_loop(self) -> None:
         """Refresh last known RSSI values when the adapter exposes them."""
@@ -291,15 +296,39 @@ class GatewayRuntime:
                     if isinstance(result, Exception):
                         LOGGER.debug("RSSI refresh failed for %s: %s", session.target.address, result)
 
-    def log_link_snapshots(self) -> None:
+    async def log_link_snapshots(self) -> None:
         """Write one link metrics snapshot row per active pod."""
+        if self.writer_pipeline is None:
+            return
         timestamp = utc_now_iso()
         for session in self.sessions:
             snapshot = session.stats.snapshot(ts_pc_utc=timestamp)
-            if self.link_writer is not None:
-                self.link_writer.write_snapshot(snapshot)
-            if self.legacy_csv_logger is not None:
-                self.legacy_csv_logger.log_link_snapshot(snapshot)
+            await self.writer_pipeline.enqueue_link_snapshot(snapshot)
+
+    def _create_guarded_task(self, awaitable: Awaitable[None], *, name: str) -> asyncio.Task[None]:
+        task = asyncio.create_task(awaitable, name=name)
+
+        def _on_done(completed: asyncio.Task[None]) -> None:
+            if completed.cancelled():
+                return
+            try:
+                completed.result()
+            except Exception as exc:
+                LOGGER.critical(
+                    "Background task %s crashed.",
+                    name,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
+                self._fatal_task_error = exc
+                self._stop_event.set()
+            else:
+                if not self._stop_event.is_set():
+                    LOGGER.error("Background task %s exited unexpectedly.", name)
+                    self._fatal_task_error = RuntimeError(f"{name} exited unexpectedly")
+                    self._stop_event.set()
+
+        task.add_done_callback(_on_done)
+        return task
 
 
 async def async_main(args: argparse.Namespace) -> int:

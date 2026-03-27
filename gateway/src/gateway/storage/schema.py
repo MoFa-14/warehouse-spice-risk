@@ -13,6 +13,7 @@ RAW_SAMPLE_COLUMNS = [
     "ts_uptime_s",
     "temp_c",
     "rh_pct",
+    "dew_point_c",
     "flags",
     "rssi",
     "quality_flags",

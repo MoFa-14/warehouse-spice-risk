@@ -19,4 +19,5 @@ class DashboardConfig:
     ACK_MINUTES = 30
     MAX_CHART_POINTS = 5000
     DEFAULT_RANGE = "24h"
+    AUTO_REFRESH_SECONDS = 5
     SECRET_KEY = "warehouse-spice-risk-dashboard"

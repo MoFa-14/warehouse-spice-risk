@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Awaitable, Callable
 
 from bleak import BleakClient
@@ -14,11 +15,11 @@ from gateway.ble.gatt import GattProfile, ensure_profile_present, read_status_te
 from gateway.ble.scanner import resolve_device
 from gateway.config import GatewaySettings, normalize_address
 from gateway.link.stats import LinkStats
-from gateway.protocol.decoder import DecodeError, TelemetryRecord, decode_status_payload, decode_telemetry_payload
-from gateway.protocol.json_reassembler import JsonReassembler
+from gateway.protocol.decoder import DecodeError, StatusRecord, TelemetryRecord, decode_status_payload, decode_telemetry_payload
 from gateway.protocol.validation import validate_telemetry
+from gateway.protocol.json_reassembler import JsonReassembler
 from gateway.utils.backoff import ExponentialBackoff
-from gateway.utils.timeutils import utc_now_iso
+from gateway.utils.timeutils import utc_now, utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
@@ -56,6 +57,10 @@ class PodSession:
         self._notification_lock = asyncio.Lock()
         self._reassembler = JsonReassembler()
         self._seen_sequences: set[tuple[str, int]] = set()
+        self._connected_since_utc: datetime | None = None
+        self._last_telemetry_time_utc: datetime | None = None
+        self._watchdog_resubscribe_issued_at: datetime | None = None
+        self._watchdog_reconnect_requested_at: datetime | None = None
         self._logger = logging.getLogger(f"{__name__}.{normalize_address(target.address).replace(':', '')}")
 
     async def run(self) -> None:
@@ -91,17 +96,31 @@ class PodSession:
                 await client.connect(timeout=self.settings.scan_timeout_s)
                 ensure_profile_present(client, self.profile)
                 self.stats.mark_connected()
+                self._connected_since_utc = utc_now()
+                self._reset_watchdog_state(clear_telemetry=False)
                 backoff.reset()
                 self._logger.info("Connected to %s (%s)", scan_match.name, scan_match.address)
 
-                await self._maybe_send_command(client)
-                await self._log_status(client)
                 await client.start_notify(self.profile.telemetry_char_uuid, self._handle_notification)
-                await self._wait_until_disconnect_or_stop()
+                await self._synchronize_runtime(client)
+                watchdog_task = asyncio.create_task(
+                    self._telemetry_watchdog_loop(),
+                    name=f"telemetry-watchdog-{normalize_address(self.target.address)}",
+                )
+                try:
+                    await self._wait_until_disconnect_or_stop(watchdog_task)
+                finally:
+                    watchdog_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await watchdog_task
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                self._logger.warning("BLE session error for %s: %s", self.target.address, exc)
+                self._logger.error(
+                    "BLE session error for %s",
+                    self.target.address,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
             finally:
                 await self._disconnect_client()
 
@@ -129,14 +148,31 @@ class PodSession:
         if scan_match is not None:
             self.stats.update_rssi(scan_match.rssi)
 
-    async def _log_status(self, client: BleakClient) -> None:
-        status_text = await read_status_text(client, self.profile)
-        try:
-            status = decode_status_payload(status_text)
-        except DecodeError as exc:
-            self._logger.warning("Status parse warning for %s: %s | raw=%s", self.target.address, exc, status_text)
-            return
+    async def _synchronize_runtime(self, client: BleakClient) -> None:
+        status = await self._read_status(client)
+        if status is not None:
+            self._log_status_record(status)
 
+        command_sent = await self._maybe_send_command(client)
+        interval_updated = await self._maybe_enforce_sample_interval(client, status)
+
+        if command_sent or interval_updated:
+            await asyncio.sleep(0.25)
+            refreshed_status = await self._read_status(client)
+            if refreshed_status is not None and refreshed_status != status:
+                self._log_status_record(refreshed_status)
+
+    async def _read_status(self, client: BleakClient) -> StatusRecord | None:
+        try:
+            status_text = await read_status_text(client, self.profile)
+            return decode_status_payload(status_text)
+        except DecodeError as exc:
+            self._logger.warning("Status parse warning for %s: %s", self.target.address, exc)
+        except Exception as exc:
+            self._logger.warning("Status read warning for %s: %s", self.target.address, exc)
+        return None
+
+    def _log_status_record(self, status: StatusRecord) -> None:
         self._logger.info(
             "status firmware_version=%s last_error=%s sample_interval_s=%s",
             status.firmware_version,
@@ -144,14 +180,44 @@ class PodSession:
             status.sample_interval_s,
         )
 
-    async def _maybe_send_command(self, client: BleakClient) -> None:
+    async def _maybe_send_command(self, client: BleakClient) -> bool:
         if not self.settings.send_command:
-            return
+            return False
         command = self.settings.send_command.strip()
         if not command:
-            return
+            return False
         await write_control_command(client, self.profile, command)
         self._logger.info("control command sent: %s", command)
+        return True
+
+    async def _maybe_enforce_sample_interval(self, client: BleakClient, status: StatusRecord | None) -> bool:
+        desired_interval_s = int(self.settings.firmware.sample_interval_s)
+        if desired_interval_s <= 0:
+            return False
+        if self._has_explicit_interval_command():
+            return False
+        if status is not None and status.sample_interval_s == desired_interval_s:
+            return False
+
+        command = f"SET_INTERVAL:{desired_interval_s}"
+        await write_control_command(client, self.profile, command)
+        if status is None:
+            self._logger.info(
+                "control command sent: %s (status unavailable, enforcing configured interval)",
+                command,
+            )
+        else:
+            self._logger.info(
+                "control command sent: %s (pod reported %ss)",
+                command,
+                status.sample_interval_s,
+            )
+        return True
+
+    def _has_explicit_interval_command(self) -> bool:
+        if not self.settings.send_command:
+            return False
+        return self.settings.send_command.strip().upper().startswith("SET_INTERVAL")
 
     async def _handle_notification(self, _characteristic, payload: bytearray) -> None:
         async with self._notification_lock:
@@ -163,6 +229,7 @@ class PodSession:
                     self._logger.warning("Discarding malformed telemetry from %s: %s", self.target.address, exc)
                     continue
 
+                self._last_telemetry_time_utc = utc_now()
                 self.stats.update_identity(record.pod_id)
                 quality_flags: list[str] = []
 
@@ -206,15 +273,21 @@ class PodSession:
                     record.flags,
                     "|".join(ordered_flags) if ordered_flags else "-",
                 )
-                await self.sample_handler(record, ordered_flags, self.stats, timestamp)
+                try:
+                    await self.sample_handler(record, ordered_flags, self.stats, timestamp)
+                except Exception as exc:
+                    self._logger.error(
+                        "Telemetry sample handling failed for pod_id=%s seq=%s",
+                        record.pod_id,
+                        record.seq,
+                        exc_info=(type(exc), exc, exc.__traceback__),
+                    )
 
-    async def _wait_until_disconnect_or_stop(self) -> None:
+    async def _wait_until_disconnect_or_stop(self, *extra_tasks: asyncio.Task[None]) -> None:
         stop_wait = asyncio.create_task(self._stop_event.wait())
         disconnect_wait = asyncio.create_task(self._disconnected_event.wait())
-        done, pending = await asyncio.wait(
-            {stop_wait, disconnect_wait},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
+        wait_set = {stop_wait, disconnect_wait, *extra_tasks}
+        done, pending = await asyncio.wait(wait_set, return_when=asyncio.FIRST_COMPLETED)
         for task in pending:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -231,10 +304,15 @@ class PodSession:
     async def _disconnect_client(self) -> None:
         client, self._client = self._client, None
         if client is None:
+            self._connected_since_utc = None
+            self._reset_watchdog_state()
             return
         if client.is_connected:
             with contextlib.suppress(Exception):
                 await client.disconnect()
+        self._reassembler.reset()
+        self._connected_since_utc = None
+        self._reset_watchdog_state()
         self.stats.mark_disconnected()
 
     def _on_disconnected(self, _client: BleakClient) -> None:
@@ -243,6 +321,118 @@ class PodSession:
         self._loop.call_soon_threadsafe(self._handle_disconnected_event)
 
     def _handle_disconnected_event(self) -> None:
+        self._connected_since_utc = None
+        self._reset_watchdog_state()
         self.stats.mark_disconnected()
         self._disconnected_event.set()
         self._logger.warning("Disconnected from %s", self.target.address)
+
+    async def _telemetry_watchdog_loop(self) -> None:
+        while not self._stop_event.is_set() and not self._disconnected_event.is_set():
+            await asyncio.sleep(self._watchdog_poll_interval_s())
+            await self._telemetry_watchdog_tick()
+
+    async def _telemetry_watchdog_tick(self, now: datetime | None = None) -> None:
+        action = self._determine_watchdog_action(now or utc_now())
+        if action == "resubscribe":
+            self._logger.warning(
+                "No telemetry for %.1fs from %s; forcing notification resubscribe.",
+                self._seconds_since_last_telemetry(now or utc_now()),
+                self.target.address,
+            )
+            try:
+                await self._force_resubscribe()
+            except Exception as exc:
+                self._logger.error(
+                    "Telemetry watchdog resubscribe failed for %s",
+                    self.target.address,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
+        elif action == "reconnect":
+            self._logger.warning(
+                "Telemetry still stalled for %.1fs from %s after resubscribe; reconnecting BLE client.",
+                self._seconds_since_last_telemetry(now or utc_now()),
+                self.target.address,
+            )
+            try:
+                await self._force_reconnect()
+            except Exception as exc:
+                self._logger.error(
+                    "Telemetry watchdog reconnect failed for %s",
+                    self.target.address,
+                    exc_info=(type(exc), exc, exc.__traceback__),
+                )
+
+    def _determine_watchdog_action(self, now: datetime) -> str | None:
+        client = self._client
+        if client is None or not getattr(client, "is_connected", False) or not self.stats.connected:
+            return None
+
+        if (
+            self._watchdog_resubscribe_issued_at is not None
+            and self._last_telemetry_time_utc is not None
+            and self._last_telemetry_time_utc > self._watchdog_resubscribe_issued_at
+        ):
+            self._watchdog_resubscribe_issued_at = None
+            self._watchdog_reconnect_requested_at = None
+
+        reference_time = self._last_telemetry_time_utc or self._connected_since_utc
+        if reference_time is None:
+            return None
+
+        elapsed_s = (now - reference_time).total_seconds()
+        stall_timeout_s = self._telemetry_stall_timeout_s()
+        reconnect_timeout_s = stall_timeout_s + self._telemetry_reconnect_timeout_s()
+
+        if self._watchdog_resubscribe_issued_at is None and elapsed_s > stall_timeout_s:
+            self._watchdog_resubscribe_issued_at = now
+            return "resubscribe"
+
+        if (
+            self._watchdog_resubscribe_issued_at is not None
+            and self._watchdog_reconnect_requested_at is None
+            and elapsed_s > reconnect_timeout_s
+        ):
+            self._watchdog_reconnect_requested_at = now
+            return "reconnect"
+
+        return None
+
+    async def _force_resubscribe(self) -> None:
+        client = self._client
+        if client is None or not getattr(client, "is_connected", False):
+            return
+        async with self._notification_lock:
+            self._reassembler.reset()
+            with contextlib.suppress(Exception):
+                await client.stop_notify(self.profile.telemetry_char_uuid)
+            await client.start_notify(self.profile.telemetry_char_uuid, self._handle_notification)
+
+    async def _force_reconnect(self) -> None:
+        client = self._client
+        if client is None:
+            return
+        if getattr(client, "is_connected", False):
+            await client.disconnect()
+        self._handle_disconnected_event()
+
+    def _reset_watchdog_state(self, *, clear_telemetry: bool = True) -> None:
+        self._watchdog_resubscribe_issued_at = None
+        self._watchdog_reconnect_requested_at = None
+        if clear_telemetry:
+            self._last_telemetry_time_utc = None
+
+    def _telemetry_stall_timeout_s(self) -> float:
+        return (2.0 * float(self.settings.firmware.sample_interval_s)) + 5.0
+
+    def _telemetry_reconnect_timeout_s(self) -> float:
+        return max(float(self.settings.firmware.sample_interval_s) + 5.0, 5.0)
+
+    def _watchdog_poll_interval_s(self) -> float:
+        return max(1.0, min(5.0, float(self.settings.firmware.sample_interval_s)))
+
+    def _seconds_since_last_telemetry(self, now: datetime) -> float:
+        reference_time = self._last_telemetry_time_utc or self._connected_since_utc
+        if reference_time is None:
+            return 0.0
+        return max((now - reference_time).total_seconds(), 0.0)

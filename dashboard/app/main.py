@@ -33,6 +33,7 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     _ensure_runtime_paths(app)
     _register_filters(app)
+    _register_context_processors(app)
     _register_routes(app)
     return app
 
@@ -69,6 +70,14 @@ def _register_filters(app: Flask) -> None:
             return f"{float(value) * 100:.2f}%"
         except (TypeError, ValueError):
             return "--"
+
+
+def _register_context_processors(app: Flask) -> None:
+    @app.context_processor
+    def inject_dashboard_defaults():
+        return {
+            "auto_refresh_seconds": int(app.config.get("AUTO_REFRESH_SECONDS", 0) or 0),
+        }
 
 
 def _register_routes(app: Flask) -> None:

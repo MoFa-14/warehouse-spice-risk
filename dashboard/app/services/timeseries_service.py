@@ -75,7 +75,7 @@ def build_timeseries_context(data_root: Path, pod_id: str, window: TimeWindow, *
 
     temp_frame = _temperature_frame(raw_frame, processed_frame)
     rh_frame = _humidity_frame(raw_frame, processed_frame)
-    dew_frame = _dewpoint_frame(processed_frame)
+    dew_frame = _dewpoint_frame(raw_frame, processed_frame)
 
     return {
         "has_data": True,
@@ -103,10 +103,12 @@ def _humidity_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> p
     return pd.DataFrame(columns=["ts_pc_utc", "value"])
 
 
-def _dewpoint_frame(processed_frame: pd.DataFrame) -> pd.DataFrame:
-    if processed_frame.empty or "dew_point_c" not in processed_frame:
-        return pd.DataFrame(columns=["ts_pc_utc", "value"])
-    return processed_frame[["ts_pc_utc", "dew_point_c"]].rename(columns={"dew_point_c": "value"}).dropna()
+def _dewpoint_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> pd.DataFrame:
+    if not raw_frame.empty and "dew_point_c" in raw_frame.columns and raw_frame["dew_point_c"].notna().any():
+        return raw_frame[["ts_pc_utc", "dew_point_c"]].rename(columns={"dew_point_c": "value"}).dropna()
+    if not processed_frame.empty and "dew_point_c" in processed_frame.columns:
+        return processed_frame[["ts_pc_utc", "dew_point_c"]].rename(columns={"dew_point_c": "value"}).dropna()
+    return pd.DataFrame(columns=["ts_pc_utc", "value"])
 
 
 def _filter_window(frame: pd.DataFrame, window: TimeWindow) -> pd.DataFrame:
