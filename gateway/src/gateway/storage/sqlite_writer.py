@@ -16,6 +16,7 @@ from gateway.multi.record import TelemetryRecord as MultiTelemetryRecord
 from gateway.protocol.decoder import TelemetryRecord as ProtocolTelemetryRecord
 from gateway.protocol.validation import format_quality_flags
 from gateway.storage.sqlite_db import connect_sqlite, initialize_schema, resolve_db_path
+from gateway.utils.sequence import sequence_reset_detected
 from gateway.utils.timeutils import utc_now, utc_now_iso
 
 
@@ -93,9 +94,11 @@ class SqliteStorageWriter:
         quality_flags: Iterable[str],
         source: str,
     ) -> SqliteWriteResult:
-        quality_text = format_quality_flags(tuple(quality_flags))
+        quality_flags_tuple = tuple(quality_flags)
+        force_sequence_reset = any(str(flag).strip().lower() == "sequence_reset" for flag in quality_flags_tuple)
+        quality_text = format_quality_flags(quality_flags_tuple)
         state = self._session_state_for(record.pod_id)
-        session_id = self._resolve_session_id(state, record)
+        session_id = self._resolve_session_id(state, record, force_sequence_reset=force_sequence_reset)
         cursor = self._connection.execute(
             """
             INSERT OR IGNORE INTO samples_raw (
@@ -200,20 +203,26 @@ class SqliteStorageWriter:
         return state
 
     @staticmethod
-    def _resolve_session_id(state: _PodSessionState, record: ProtocolTelemetryRecord) -> int:
+    def _resolve_session_id(
+        state: _PodSessionState,
+        record: ProtocolTelemetryRecord,
+        *,
+        force_sequence_reset: bool = False,
+    ) -> int:
         if state.last_seq is None:
             return state.session_id
-        if SqliteStorageWriter._is_sequence_reset(state, record):
+        if force_sequence_reset or SqliteStorageWriter._is_sequence_reset(state, record):
             return state.session_id + 1
         return state.session_id
 
     @staticmethod
     def _is_sequence_reset(state: _PodSessionState, record: ProtocolTelemetryRecord) -> bool:
-        if state.last_uptime_s is not None and record.ts_uptime_s + 1.0 < state.last_uptime_s:
-            return True
-        if state.last_seq is not None and record.seq == 1 and state.last_seq > 1:
-            return True
-        return False
+        return sequence_reset_detected(
+            last_seq=state.last_seq,
+            last_uptime_s=state.last_uptime_s,
+            seq=int(record.seq),
+            ts_uptime_s=float(record.ts_uptime_s),
+        )
 
     @staticmethod
     def _remember_progress(state: _PodSessionState, record: ProtocolTelemetryRecord, session_id: int) -> None:

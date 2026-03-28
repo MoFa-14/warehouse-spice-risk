@@ -242,7 +242,6 @@ class PodSession:
                         await self.corrupt_handler()
                     continue
 
-                self._last_telemetry_time_utc = utc_now()
                 self.stats.update_identity(record.pod_id)
                 quality_flags: list[str] = []
 
@@ -265,7 +264,12 @@ class PodSession:
                 )
                 quality_flags.extend(validation.quality_flags)
 
-                timestamp = utc_now_iso()
+                # Only unique accepted samples should refresh the watchdog timer.
+                # Repeated duplicates can otherwise keep the BLE session "alive"
+                # while storage and the dashboard stop advancing.
+                sample_seen_at = utc_now()
+                self._last_telemetry_time_utc = sample_seen_at
+                timestamp = utc_now_iso(sample_seen_at)
                 missing = self.stats.note_received(
                     seq=record.seq,
                     ts_uptime_s=record.ts_uptime_s,

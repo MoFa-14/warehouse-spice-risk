@@ -390,6 +390,8 @@ More advanced feature engineering should stay in the later ML layer.
 - During the transition from the older directory-level lock, the gateway also honors a legacy `data/db/.lock` if an older process created it.
 - In CSV mode, the gateway still uses `gateway/logs/.lock`.
 - If notifications stall while the BLE connection still looks alive, the telemetry watchdog logs a warning, forces a notify resubscribe, and then reconnects the client if telemetry still does not resume.
+- The watchdog treats only unique telemetry progress as healthy. If BLE starts replaying the same sample repeatedly, the gateway now treats that as a stall and forces a resubscribe or reconnect instead of silently freezing the live database view.
+- Sequence/session reset detection also handles CircuitPython soft reloads where `seq` drops sharply but `ts_uptime_s` keeps increasing. That prevents a restarted pod from being mistaken for an old duplicate stream after the gateway reconnects mid-run.
 - Writer failures are never silent. The writer prints full exceptions and keeps retrying.
 - If repeated writer failures happen in a short window, the gateway prints a `WRITER RED FLAG` message and continues retrying.
 

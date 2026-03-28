@@ -15,7 +15,7 @@ from gateway.config import ValidationSettings
 from gateway.control.resend import ResendController
 from gateway.firmware_config_loader import default_firmware_config_path, load_firmware_config
 from gateway.multi.record import TelemetryRecord
-from gateway.multi.router import PodRouter
+from gateway.multi.router import PodRouter, PodStats
 
 
 class _DuplicateThenAdvanceWriter:
@@ -196,6 +196,27 @@ class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
         await router.stop()
 
         self.assertEqual(controller.from_seq_requests, [("02", 2)])
+
+    async def test_router_detects_soft_reload_sequence_drop_with_higher_uptime(self) -> None:
+        stats = PodStats(
+            pod_id="01",
+            source="BLE",
+            last_seq_high_water=104,
+            last_uptime_s=8207.6,
+        )
+        record = TelemetryRecord(
+            pod_id="01",
+            seq=89,
+            ts_uptime_s=11640.7,
+            temp_c=18.19,
+            rh_pct=32.31,
+            flags=0,
+            rssi=-43,
+            source="BLE",
+            ts_pc_utc="2026-03-28T18:30:36Z",
+        )
+
+        self.assertTrue(PodRouter._should_reset_sequence(stats, record))
 
 
 if __name__ == "__main__":

@@ -99,6 +99,7 @@ def init_db(db_path: Path | str | None = None) -> Path:
 def initialize_schema(connection: sqlite3.Connection) -> None:
     """Create tables and indexes if they do not already exist."""
     _ensure_samples_raw_schema(connection)
+    _normalize_backfill_session_ids(connection)
     for statement in OTHER_SCHEMA_STATEMENTS:
         connection.execute(statement)
     connection.commit()
@@ -176,3 +177,42 @@ def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
         (str(table_name),),
     ).fetchone()
     return row is not None
+
+
+def _normalize_backfill_session_ids(connection: sqlite3.Connection) -> None:
+    if not _table_exists(connection, "samples_raw"):
+        return
+
+    pod_rows = connection.execute(
+        """
+        SELECT pod_id, session_id, MIN(ts_pc_utc) AS first_ts
+        FROM samples_raw
+        WHERE source = 'CSV_BACKFILL' AND session_id >= 0
+        GROUP BY pod_id, session_id
+        ORDER BY pod_id ASC, first_ts ASC, session_id ASC
+        """
+    ).fetchall()
+    if not pod_rows:
+        return
+
+    by_pod: dict[str, list[int]] = {}
+    for row in pod_rows:
+        by_pod.setdefault(str(row["pod_id"]), []).append(int(row["session_id"]))
+
+    for pod_id, session_ids in by_pod.items():
+        current_min = connection.execute(
+            "SELECT COALESCE(MIN(session_id), 0) AS minimum_session_id FROM samples_raw WHERE pod_id = ?",
+            (pod_id,),
+        ).fetchone()
+        minimum_session_id = int(current_min["minimum_session_id"]) if current_min is not None else 0
+        next_negative_session_id = min(minimum_session_id, 0) - len(session_ids)
+        for offset, old_session_id in enumerate(session_ids):
+            new_session_id = next_negative_session_id + offset
+            connection.execute(
+                """
+                UPDATE samples_raw
+                SET session_id = ?
+                WHERE pod_id = ? AND source = 'CSV_BACKFILL' AND session_id = ?
+                """,
+                (new_session_id, pod_id, old_session_id),
+            )

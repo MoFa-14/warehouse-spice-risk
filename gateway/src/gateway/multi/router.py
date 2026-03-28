@@ -18,6 +18,7 @@ from gateway.protocol.validation import validate_telemetry
 from gateway.storage.per_pod_csv_writer import PerPodCsvWriter
 from gateway.storage.sqlite_reader import latest_sample
 from gateway.storage.sqlite_writer import SqliteStorageWriter
+from gateway.utils.sequence import sequence_reset_detected
 from gateway.utils.timeutils import utc_now
 
 
@@ -239,11 +240,12 @@ class PodRouter:
 
     @staticmethod
     def _should_reset_sequence(stats: PodStats, record: TelemetryRecord) -> bool:
-        if stats.last_uptime_s is not None and record.ts_uptime_s + 1.0 < stats.last_uptime_s:
-            return True
-        if stats.last_seq_high_water is not None and record.seq == 1 and stats.last_seq_high_water > 1:
-            return True
-        return False
+        return sequence_reset_detected(
+            last_seq=stats.last_seq_high_water,
+            last_uptime_s=stats.last_uptime_s,
+            seq=int(record.seq),
+            ts_uptime_s=float(record.ts_uptime_s),
+        )
 
     @staticmethod
     def _clone_stats(stats: PodStats) -> PodStats:

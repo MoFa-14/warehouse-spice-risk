@@ -12,7 +12,7 @@ if str(SRC_DIR) not in sys.path:
 
 from gateway.link.stats import LinkSnapshot
 from gateway.protocol.decoder import TelemetryRecord
-from gateway.storage.sqlite_db import connect_sqlite, init_db
+from gateway.storage.sqlite_db import connect_sqlite, init_db, initialize_schema
 from gateway.storage.sqlite_reader import latest_sample, samples_in_range, utc_bounds_for_dates
 from gateway.storage.sqlite_writer import (
     SqliteStorageWriter,
@@ -205,6 +205,116 @@ class SqliteStorageTests(unittest.TestCase):
                 connection.close()
 
             self.assertEqual([(row["session_id"], row["seq"]) for row in rows], [(0, 1), (0, 2), (1, 1)])
+
+    def test_soft_reload_sequence_drop_with_higher_uptime_opens_new_session(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "telemetry.sqlite"
+            writer = SqliteStorageWriter(db_path)
+            writer.write_sample(
+                ts_pc_utc="2026-03-28T17:26:31Z",
+                record=TelemetryRecord(
+                    pod_id="01",
+                    seq=104,
+                    ts_uptime_s=8207.6,
+                    temp_c=18.53,
+                    rh_pct=32.25,
+                    flags=0,
+                ),
+                rssi=-43,
+                quality_flags=(),
+                source="BLE",
+            )
+            restarted = writer.write_sample(
+                ts_pc_utc="2026-03-28T18:30:36Z",
+                record=TelemetryRecord(
+                    pod_id="01",
+                    seq=89,
+                    ts_uptime_s=11640.7,
+                    temp_c=18.19,
+                    rh_pct=32.31,
+                    flags=0,
+                ),
+                rssi=-43,
+                quality_flags=("sequence_reset",),
+                source="BLE",
+            )
+            writer.close()
+
+            self.assertTrue(restarted.inserted)
+            self.assertFalse(restarted.duplicate)
+
+            connection = connect_sqlite(db_path, readonly=True)
+            try:
+                rows = connection.execute(
+                    "SELECT session_id, seq, ts_uptime_s FROM samples_raw WHERE pod_id = '01' ORDER BY session_id ASC, seq ASC"
+                ).fetchall()
+            finally:
+                connection.close()
+
+            self.assertEqual(
+                [(row["session_id"], row["seq"], row["ts_uptime_s"]) for row in rows],
+                [(0, 104, 8207.6), (1, 89, 11640.7)],
+            )
+
+    def test_initialize_schema_moves_backfill_sessions_to_negative_range(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "telemetry.sqlite"
+            connection = connect_sqlite(db_path)
+            try:
+                connection.execute(
+                    """
+                    CREATE TABLE samples_raw (
+                        ts_pc_utc TEXT NOT NULL,
+                        pod_id TEXT NOT NULL,
+                        session_id INTEGER NOT NULL DEFAULT 0,
+                        seq INTEGER NOT NULL,
+                        ts_uptime_s REAL,
+                        temp_c REAL,
+                        rh_pct REAL,
+                        flags INTEGER,
+                        rssi INTEGER,
+                        quality_flags TEXT,
+                        source TEXT,
+                        PRIMARY KEY (pod_id, session_id, seq)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    INSERT INTO samples_raw (
+                        ts_pc_utc, pod_id, session_id, seq, ts_uptime_s, temp_c, rh_pct, flags, rssi, quality_flags, source
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("2026-03-28T17:26:31Z", "01", 3, 104, 8207.6, 18.53, 32.25, 0, -43, "", "BLE"),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO samples_raw (
+                        ts_pc_utc, pod_id, session_id, seq, ts_uptime_s, temp_c, rh_pct, flags, rssi, quality_flags, source
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("2026-03-25T16:58:57Z", "01", 3, 134, 6358.9, 25.0, 24.0, 0, -43, "", "CSV_BACKFILL"),
+                )
+                connection.execute(
+                    """
+                    INSERT INTO samples_raw (
+                        ts_pc_utc, pod_id, session_id, seq, ts_uptime_s, temp_c, rh_pct, flags, rssi, quality_flags, source
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("2026-03-26T10:04:36Z", "01", 6, 134, 677.4, 24.0, 25.0, 0, -43, "", "CSV_BACKFILL"),
+                )
+                initialize_schema(connection)
+
+                rows = connection.execute(
+                    "SELECT source, session_id, seq FROM samples_raw WHERE pod_id = '01' ORDER BY source ASC, session_id ASC, seq ASC"
+                ).fetchall()
+            finally:
+                connection.close()
+
+            self.assertEqual(
+                [(row["source"], row["session_id"], row["seq"]) for row in rows],
+                [("BLE", 3, 104), ("CSV_BACKFILL", -2, 134), ("CSV_BACKFILL", -1, 134)],
+            )
 
 
 class _FlakySqliteStorageWriter:

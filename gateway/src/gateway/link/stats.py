@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from gateway.utils.sequence import sequence_reset_detected
 from gateway.utils.timeutils import utc_now_iso
 
 
@@ -62,11 +63,12 @@ class LinkStats:
         self.connected = False
 
     def should_reset_sequence(self, *, seq: int, ts_uptime_s: float) -> bool:
-        if self._last_uptime_s is not None and ts_uptime_s + 1.0 < self._last_uptime_s:
-            return True
-        if self._last_seq is not None and seq == 1 and self._last_seq > 1:
-            return True
-        return False
+        return sequence_reset_detected(
+            last_seq=self._last_seq,
+            last_uptime_s=self._last_uptime_s,
+            seq=int(seq),
+            ts_uptime_s=float(ts_uptime_s),
+        )
 
     def reset_sequence_tracking(self) -> None:
         self._last_seq = None

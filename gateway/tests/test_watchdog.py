@@ -138,6 +138,25 @@ class WatchdogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fake_client.disconnect_calls, 1)
         self.assertTrue(session._disconnected_event.is_set())
 
+    async def test_duplicate_only_telemetry_does_not_reset_watchdog_progress_timer(self) -> None:
+        session = self._build_session()
+        fake_client = _FakeClient()
+        now = utc_now()
+        session._client = fake_client
+        session.stats.connected = True
+        session._connected_since_utc = now
+        session._last_telemetry_time_utc = now
+        session._seen_sequences.add(("01", 1))
+
+        duplicate_payload = bytearray(b'{"pod_id":"01","seq":1,"ts_uptime_s":10.0,"temp_c":20.0,"rh_pct":40.0,"flags":0}')
+        await session._handle_notification(None, duplicate_payload)
+
+        await session._telemetry_watchdog_tick(now + timedelta(seconds=session._telemetry_stall_timeout_s() + 1.0))
+
+        self.assertEqual(fake_client.stop_notify_calls, 1)
+        self.assertEqual(fake_client.start_notify_calls, 1)
+        self.assertEqual(fake_client.disconnect_calls, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

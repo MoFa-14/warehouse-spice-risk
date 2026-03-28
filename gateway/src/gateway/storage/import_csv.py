@@ -340,10 +340,8 @@ def _plan_sample_sessions(
         if current_session:
             sessions.append(current_session)
 
-        if pod_id in minimum_session_by_pod:
-            first_session_id = minimum_session_by_pod[pod_id] - len(sessions)
-        else:
-            first_session_id = 0
+        minimum_session_id = minimum_session_by_pod.get(pod_id, 0)
+        first_session_id = min(minimum_session_id, 0) - len(sessions)
 
         for index, session_rows in enumerate(sessions):
             session_id = first_session_id + index
