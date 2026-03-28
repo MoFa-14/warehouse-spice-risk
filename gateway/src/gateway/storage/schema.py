@@ -81,6 +81,9 @@ _QUALITY_FLAG_MAP = {
     "json_error_fixed": QualityFlag.JSON_ERROR_FIXED,
     "duplicate": QualityFlag.DUPLICATE,
 }
+_QUALITY_FLAG_NAMES_BY_VALUE = {
+    int(member): name for name, member in _QUALITY_FLAG_MAP.items()
+}
 
 
 def quality_flags_to_mask(flags: Iterable[str]) -> int:
@@ -112,3 +115,13 @@ def parse_quality_mask(value: int | str | None) -> int:
 def has_quality_flag(mask: int, flag: QualityFlag) -> bool:
     """Return whether a parsed bitmask contains the requested flag."""
     return bool(QualityFlag(mask) & flag)
+
+
+def quality_mask_to_flags(mask: int | str | None) -> tuple[str, ...]:
+    """Decode a stored quality mask back into stable flag names."""
+    parsed_mask = parse_quality_mask(mask)
+    resolved: list[str] = []
+    for value, name in sorted(_QUALITY_FLAG_NAMES_BY_VALUE.items()):
+        if parsed_mask & value:
+            resolved.append(name)
+    return tuple(resolved)

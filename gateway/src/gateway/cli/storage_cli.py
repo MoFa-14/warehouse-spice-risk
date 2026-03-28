@@ -9,6 +9,7 @@ from typing import Sequence
 
 from gateway.preprocess.export import export_training_dataset, preprocess_date_range
 from gateway.storage.export_csv import export_all_pods_csv, export_pod_csv
+from gateway.storage.import_csv import import_csv_history
 from gateway.storage.paths import build_storage_paths
 from gateway.storage.sqlite_db import init_db, resolve_db_path
 from gateway.storage.sqlite_reader import latest_sample
@@ -69,6 +70,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--db-path",
         default="data/db/telemetry.sqlite",
         help="SQLite database path. Defaults to data/db/telemetry.sqlite.",
+    )
+
+    import_csv_parser = subparsers.add_parser(
+        "import-csv",
+        help="Copy historical raw/link CSV files into the SQLite database.",
+    )
+    import_csv_parser.add_argument(
+        "--db-path",
+        default="data/db/telemetry.sqlite",
+        help="SQLite database path. Defaults to data/db/telemetry.sqlite.",
+    )
+    import_csv_parser.add_argument(
+        "--pod",
+        action="append",
+        help="Optional pod id to import. Repeat for multiple pods. Defaults to all pods found in CSV history.",
+    )
+    import_csv_parser.add_argument(
+        "--skip-link-quality",
+        action="store_true",
+        help="Import only sample telemetry rows and skip link-quality CSV backfill.",
+    )
+    import_csv_parser.add_argument(
+        "--skip-legacy-logs",
+        action="store_true",
+        help="Ignore gateway/logs compatibility CSV files and only import canonical data/raw CSVs.",
     )
 
     args = parser.parse_args(argv)
@@ -134,6 +160,33 @@ def cli(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "init-db":
         print(init_db(args.db_path))
+        return 0
+
+    if args.command == "import-csv":
+        result = import_csv_history(
+            data_root=storage_paths.root,
+            db_path=args.db_path,
+            include_link_quality=not args.skip_link_quality,
+            include_legacy_logs=not args.skip_legacy_logs,
+            pod_ids=args.pod,
+        )
+        print(
+            "samples inserted={inserted} duplicates={duplicates} skipped={skipped} seen={seen}".format(
+                inserted=result.sample_rows_inserted,
+                duplicates=result.sample_duplicates,
+                skipped=result.sample_rows_skipped,
+                seen=result.sample_rows_seen,
+            )
+        )
+        if not args.skip_link_quality:
+            print(
+                "link_quality inserted={inserted} duplicates={duplicates} skipped={skipped} seen={seen}".format(
+                    inserted=result.link_rows_inserted,
+                    duplicates=result.link_duplicates,
+                    skipped=result.link_rows_skipped,
+                    seen=result.link_rows_seen,
+                )
+            )
         return 0
 
     if args.command == "latest":

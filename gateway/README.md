@@ -135,7 +135,7 @@ Terminal 1: hardware pod 01
 Terminal 2: synthetic pod 02
 
 ```powershell
-python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 10 --p-drop 0.1 --p-corrupt 0.05 --p-delay 0.2 --p-disconnect 0.02 --verbose
+python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 10 --zone-profile entrance_disturbed --p-drop 0.1 --p-corrupt 0.05 --p-delay 0.2 --p-disconnect 0.02 --burst-loss on --verbose
 ```
 
 Terminal 3: gateway
@@ -159,12 +159,23 @@ The synthetic pod supports these fault flags:
 - `--p-corrupt`
 - `--p-delay`
 - `--p-disconnect`
+- `--burst-loss`
+- `--burst-duration-seconds`
+- `--burst-multiplier`
 - `--max-delay`
 - `--disconnect-min`
 - `--disconnect-max`
 - `--replay-buffer-size`
 
 These are intentionally simple probabilities so you can raise or lower stress without changing code.
+
+The synthetic pod also supports warehouse microclimate zone profiles:
+
+- `--zone-profile interior_stable`
+- `--zone-profile entrance_disturbed`
+- `--zone-profile upper_rack_stratified`
+
+These let pod 02 emulate a visibly different warehouse micro-zone while the gateway continues ingesting pod 01 from the real hardware pod.
 
 ## Canonical Storage Layout
 
@@ -218,6 +229,20 @@ Export all pods for a date range:
 ```powershell
 .\.venv\Scripts\python.exe -m gateway.cli.storage_cli export-csv --all --from 2026-03-01 --to 2026-03-31 --out-dir data/exports --db-path data/db/telemetry.sqlite
 ```
+
+Copy historical CSV telemetry into SQLite without changing the original files:
+
+```powershell
+.\.venv\Scripts\python.exe -m gateway.cli.storage_cli import-csv --db-path data/db/telemetry.sqlite
+```
+
+Useful backfill options:
+
+- `--pod 01` to import only one pod
+- `--skip-link-quality` to copy only telemetry samples
+- `--skip-legacy-logs` to ignore `gateway/logs/*.csv` and import only canonical `data/raw/...` files
+
+The backfill command is idempotent. It checks the existing database first, skips rows that are already present, and leaves the source CSV files untouched.
 
 ## Raw Storage Schema
 

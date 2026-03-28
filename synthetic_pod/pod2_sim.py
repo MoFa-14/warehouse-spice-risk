@@ -11,8 +11,10 @@ import random
 from typing import Sequence
 
 from sim.buffer import ReplayBuffer
-from sim.faults import FaultAction, FaultProfile
+from sim.faults import FaultAction, FaultController, FaultProfile
 from sim.generator import SyntheticTelemetryGenerator
+from sim.schedule import ActiveHoursSchedule
+from sim.zone_profiles import get_zone_profile, zone_profile_names
 
 
 LOGGER = logging.getLogger("synthetic_pod")
@@ -24,6 +26,29 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--gateway-port", type=int, default=8765)
     parser.add_argument("--pod-id", default="02")
     parser.add_argument("--interval", type=int, default=10)
+    parser.add_argument(
+        "--zone-profile",
+        choices=zone_profile_names(),
+        default="entrance_disturbed",
+        help="Built-in warehouse micro-zone profile for pod 02.",
+    )
+    parser.add_argument("--base-temp", type=float, help="Override the zone baseline temperature in C.")
+    parser.add_argument("--base-rh", type=float, help="Override the zone baseline relative humidity in percent.")
+    parser.add_argument("--noise-temp", type=float, help="Temperature noise standard deviation in C.")
+    parser.add_argument("--noise-rh", type=float, help="Relative humidity noise standard deviation in percent.")
+    parser.add_argument("--drift-temp", type=float, help="Temperature drift random-walk step in C per sample.")
+    parser.add_argument("--drift-rh", type=float, help="Relative humidity drift random-walk step in percent per sample.")
+    parser.add_argument("--event-rate", type=float, help="Baseline disturbance event rate per hour.")
+    parser.add_argument(
+        "--event-rate-active-hours",
+        type=float,
+        help="Disturbance event rate per hour during active hours. Defaults to the zone profile.",
+    )
+    parser.add_argument("--event-spike-temp", type=float, help="Temperature spike size in C during disturbance events.")
+    parser.add_argument("--event-spike-rh", type=float, help="Relative humidity spike size in percent during disturbance events.")
+    parser.add_argument("--recovery-tau-seconds", type=float, help="Exponential recovery time constant after a disturbance.")
+    parser.add_argument("--active-hours-start", type=int, default=8, help="Start hour for active warehouse operations.")
+    parser.add_argument("--active-hours-end", type=int, default=18, help="End hour for active warehouse operations.")
     parser.add_argument("--p-drop", type=float, default=0.0)
     parser.add_argument("--p-corrupt", type=float, default=0.0)
     parser.add_argument("--p-delay", type=float, default=0.0)
@@ -31,6 +56,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-delay", type=float, default=5.0)
     parser.add_argument("--disconnect-min", type=float, default=2.0)
     parser.add_argument("--disconnect-max", type=float, default=10.0)
+    parser.add_argument(
+        "--burst-loss",
+        choices=("on", "off"),
+        default="off",
+        help="Enable or disable bursty loss/delay periods during disturbances.",
+    )
+    parser.add_argument("--burst-duration-seconds", type=float, default=30.0)
+    parser.add_argument("--burst-multiplier", type=float, default=3.0)
     parser.add_argument("--replay-buffer-size", type=int, default=300)
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args(argv)
@@ -41,6 +74,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("--gateway-port must be positive.")
     if args.replay_buffer_size <= 0:
         parser.error("--replay-buffer-size must be positive.")
+    if not 0 <= args.active_hours_start <= 23 or not 0 <= args.active_hours_end <= 23:
+        parser.error("--active-hours-start and --active-hours-end must be between 0 and 23.")
+    for flag_name in ("p_drop", "p_corrupt", "p_delay", "p_disconnect"):
+        value = getattr(args, flag_name)
+        if value < 0.0 or value > 1.0:
+            parser.error(f"--{flag_name.replace('_', '-')} must be between 0 and 1.")
+    for flag_name in (
+        "max_delay",
+        "disconnect_min",
+        "disconnect_max",
+        "noise_temp",
+        "noise_rh",
+        "drift_temp",
+        "drift_rh",
+        "event_rate",
+        "event_rate_active_hours",
+        "event_spike_temp",
+        "event_spike_rh",
+        "recovery_tau_seconds",
+        "burst_duration_seconds",
+        "burst_multiplier",
+    ):
+        value = getattr(args, flag_name)
+        if value is not None and value < 0.0:
+            parser.error(f"--{flag_name.replace('_', '-')} must be non-negative.")
     return args
 
 
@@ -56,9 +114,31 @@ class SyntheticPodClient:
 
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
-        self.generator = SyntheticTelemetryGenerator(pod_id=args.pod_id, interval_s=args.interval)
+        zone_profile = get_zone_profile(args.zone_profile)
+        schedule = ActiveHoursSchedule(
+            active_start_hour=args.active_hours_start,
+            active_end_hour=args.active_hours_end,
+        )
+        self.generator = SyntheticTelemetryGenerator.from_zone_profile(
+            pod_id=args.pod_id,
+            interval_s=args.interval,
+            zone_profile=zone_profile,
+            base_temp_c=args.base_temp,
+            base_rh_pct=args.base_rh,
+            noise_temp_c=args.noise_temp,
+            noise_rh_pct=args.noise_rh,
+            drift_temp_step_c=args.drift_temp,
+            drift_rh_step_pct=args.drift_rh,
+            event_rate_per_hour=args.event_rate,
+            event_rate_active_hours_per_hour=args.event_rate_active_hours,
+            event_spike_temp_c=args.event_spike_temp,
+            event_spike_rh_pct=args.event_spike_rh,
+            recovery_tau_seconds=args.recovery_tau_seconds,
+            schedule=schedule,
+        )
         self.buffer = ReplayBuffer(maxlen=args.replay_buffer_size)
-        self.faults = FaultProfile(
+        self.faults = FaultController(
+            profile=FaultProfile(
             p_drop=args.p_drop,
             p_corrupt=args.p_corrupt,
             p_delay=args.p_delay,
@@ -66,6 +146,11 @@ class SyntheticPodClient:
             max_delay_s=args.max_delay,
             disconnect_min_s=args.disconnect_min,
             disconnect_max_s=args.disconnect_max,
+            burst_loss_enabled=args.burst_loss == "on",
+            burst_duration_s=args.burst_duration_seconds,
+            burst_multiplier=args.burst_multiplier,
+            ),
+            interval_s=args.interval,
         )
         self._stop_event = asyncio.Event()
         self._pending_deliveries: set[asyncio.Task[None]] = set()
@@ -101,20 +186,38 @@ class SyntheticPodClient:
     async def _send_loop(self) -> float:
         while not self._stop_event.is_set():
             sample = self.generator.next_sample()
-            self.buffer.add(sample)
-            LOGGER.info("[pod=%s] seq=%s temp=%s rh=%s", sample["pod_id"], sample["seq"], sample["temp_c"], sample["rh_pct"])
-            action = self.faults.choose_action()
+            payload = sample.to_payload()
+            self.buffer.add(payload)
+            action = self.faults.choose_action(disturbance_active=sample.disturbance_active)
+            LOGGER.info(
+                "[pod=%s zone=%s] seq=%s temp=%.3f rh=%.3f disturbance=%s event=%s active_hours=%s burst_fault=%s",
+                sample.pod_id,
+                sample.zone_profile,
+                sample.seq,
+                sample.temp_c,
+                sample.rh_pct,
+                "on" if sample.disturbance_active else "off",
+                "triggered" if sample.disturbance_just_triggered else "steady",
+                "yes" if sample.active_hours else "no",
+                "yes" if action.burst_active else "no",
+            )
 
             if action.disconnect_s > 0:
                 return action.disconnect_s
             if action.drop:
-                LOGGER.info("Dropped seq=%s on purpose for fault injection.", sample["seq"])
+                LOGGER.info(
+                    "Dropped seq=%s on purpose for fault injection (burst=%s effective_drop=%.2f effective_delay=%.2f).",
+                    sample.seq,
+                    "on" if action.burst_active else "off",
+                    action.effective_p_drop,
+                    action.effective_p_delay,
+                )
             elif action.delay_s > 0:
-                task = asyncio.create_task(self._deliver_after_delay(sample, action), name=f"delay-seq-{sample['seq']}")
+                task = asyncio.create_task(self._deliver_after_delay(payload, action), name=f"delay-seq-{sample.seq}")
                 self._pending_deliveries.add(task)
                 task.add_done_callback(self._pending_deliveries.discard)
             else:
-                await self._deliver_sample(sample, corrupt=action.corrupt)
+                await self._deliver_sample(payload, corrupt=action.corrupt)
 
             try:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.args.interval)
