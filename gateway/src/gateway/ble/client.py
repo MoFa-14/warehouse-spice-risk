@@ -101,14 +101,14 @@ class PodSession:
             self._client = client
 
             try:
-                self._logger.info("Connecting to %s (%s)", scan_match.name, scan_match.address)
+                self._logger.debug("Connecting to %s (%s)", scan_match.name, scan_match.address)
                 await client.connect(timeout=self.settings.scan_timeout_s)
                 ensure_profile_present(client, self.profile)
                 self.stats.mark_connected()
                 self._connected_since_utc = utc_now()
                 self._reset_watchdog_state(clear_telemetry=False)
                 backoff.reset()
-                self._logger.info("Connected to %s (%s)", scan_match.name, scan_match.address)
+                self._logger.debug("Connected to %s (%s)", scan_match.name, scan_match.address)
                 if self.connect_handler is not None:
                     await self.connect_handler(self.stats.reconnect_count > 0)
 
@@ -139,7 +139,7 @@ class PodSession:
                 break
 
             delay = backoff.next_delay()
-            self._logger.info("Scheduling reconnect to %s in %.1fs", self.target.address, delay)
+            self._logger.debug("Scheduling reconnect to %s in %.1fs", self.target.address, delay)
             await self._sleep_or_stop(delay)
 
     async def stop(self) -> None:
@@ -184,7 +184,7 @@ class PodSession:
         return None
 
     def _log_status_record(self, status: StatusRecord) -> None:
-        self._logger.info(
+        self._logger.debug(
             "status firmware_version=%s last_error=%s sample_interval_s=%s",
             status.firmware_version,
             status.last_error,
@@ -198,7 +198,7 @@ class PodSession:
         if not command:
             return False
         await write_control_command(client, self.profile, command)
-        self._logger.info("control command sent: %s", command)
+        self._logger.debug("control command sent: %s", command)
         return True
 
     async def _maybe_enforce_sample_interval(self, client: BleakClient, status: StatusRecord | None) -> bool:
@@ -213,12 +213,12 @@ class PodSession:
         command = f"SET_INTERVAL:{desired_interval_s}"
         await write_control_command(client, self.profile, command)
         if status is None:
-            self._logger.info(
+            self._logger.debug(
                 "control command sent: %s (status unavailable, enforcing configured interval)",
                 command,
             )
         else:
-            self._logger.info(
+            self._logger.debug(
                 "control command sent: %s (pod reported %ss)",
                 command,
                 status.sample_interval_s,
@@ -280,7 +280,7 @@ class PodSession:
 
                 ordered_flags = tuple(dict.fromkeys(quality_flags))
                 self._seen_sequences.add(dedupe_key)
-                self._logger.info(
+                self._logger.debug(
                     "telemetry pod_id=%s seq=%s ts_uptime_s=%.1f temp_c=%s rh_pct=%s flags=%s quality_flags=%s",
                     record.pod_id,
                     record.seq,
@@ -345,7 +345,7 @@ class PodSession:
             task = self._loop.create_task(self.disconnect_handler())
             task.add_done_callback(self._log_background_callback_exception)
         self._disconnected_event.set()
-        self._logger.warning("Disconnected from %s", self.target.address)
+        self._logger.debug("Disconnected from %s", self.target.address)
 
     def _log_background_callback_exception(self, task: asyncio.Task[None]) -> None:
         if task.cancelled():
@@ -473,18 +473,18 @@ class PodSession:
         """Best-effort resend request written to the pod control characteristic."""
         client = self._client
         if client is None or not getattr(client, "is_connected", False):
-            self._logger.info("BLE resend requested (stub) seq=%s but client is not connected", seq)
+            self._logger.debug("BLE resend requested (stub) seq=%s but client is not connected", seq)
             return
         command = f"REQ_SEQ:{int(seq)}"
         await write_control_command(client, self.profile, command)
-        self._logger.info("BLE resend requested (stub) seq=%s", seq)
+        self._logger.debug("BLE resend requested (stub) seq=%s", seq)
 
     async def request_resend_from_seq(self, from_seq: int) -> None:
         """Best-effort resend range request written to the pod control characteristic."""
         client = self._client
         if client is None or not getattr(client, "is_connected", False):
-            self._logger.info("BLE resend requested (stub) from_seq=%s but client is not connected", from_seq)
+            self._logger.debug("BLE resend requested (stub) from_seq=%s but client is not connected", from_seq)
             return
         command = f"REQ_FROM_SEQ:{int(from_seq)}"
         await write_control_command(client, self.profile, command)
-        self._logger.info("BLE resend requested (stub) from_seq=%s", from_seq)
+        self._logger.debug("BLE resend requested (stub) from_seq=%s", from_seq)

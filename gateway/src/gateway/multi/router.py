@@ -110,15 +110,21 @@ class PodRouter:
 
     def note_connected(self, pod_id: str, source: str, *, last_rssi: int | None = None) -> None:
         stats = self._stats_for(pod_id, source)
+        was_connected = stats.connected
         stats.connected = True
         if last_rssi is not None:
             stats.last_rssi = int(last_rssi)
+        if not was_connected:
+            LOGGER.info("[pod=%s source=%s] connected", pod_id, source)
 
     def note_disconnected(self, pod_id: str, source: str) -> None:
         stats = self._stats_for(pod_id, source)
-        if stats.connected:
+        was_connected = stats.connected
+        if was_connected:
             stats.disconnect_count += 1
         stats.connected = False
+        if was_connected:
+            LOGGER.info("[pod=%s source=%s] disconnected", pod_id, source)
 
     def update_rssi(self, pod_id: str, source: str, rssi: int | None) -> None:
         if rssi is None:

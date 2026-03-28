@@ -99,7 +99,7 @@ class MultiGatewayOrchestrator:
         self._tasks: list[asyncio.Task[None]] = []
 
     async def run(self) -> int:
-        LOGGER.info(
+        LOGGER.debug(
             "Multi-pod gateway starting with BLE prefix=%s tcp_port=%s interval=%ss storage=%s",
             self.settings.ble_name_prefix,
             self.settings.tcp_port,
@@ -107,9 +107,9 @@ class MultiGatewayOrchestrator:
             self.settings.storage_backend,
         )
         if self.settings.storage_backend == "sqlite":
-            LOGGER.info("Primary SQLite DB: %s", self.settings.resolved_db_path)
+            LOGGER.debug("Primary SQLite DB: %s", self.settings.resolved_db_path)
         else:
-            LOGGER.info("Per-pod raw CSV root: %s", self.settings.log_root / "pods")
+            LOGGER.debug("Per-pod raw CSV root: %s", self.settings.log_root / "pods")
         try:
             self.process_lock.acquire()
         except RuntimeError as exc:
@@ -155,7 +155,7 @@ class MultiGatewayOrchestrator:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.settings.stats_interval_s)
             except asyncio.TimeoutError:
                 for snapshot in self.router.stats_snapshot():
-                    LOGGER.info(
+                    LOGGER.debug(
                         "stats pod=%s source=%s received=%s missing=%s duplicates=%s corrupt_count=%s reconnects=%s missing_rate=%.4f",
                         snapshot.pod_id,
                         snapshot.source,

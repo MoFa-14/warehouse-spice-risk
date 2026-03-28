@@ -36,7 +36,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default="data/db/telemetry.sqlite",
         help="SQLite database path used when --storage sqlite.",
     )
-    multi.add_argument("--interval-s", type=int, default=10, help="Expected sample interval for watchdog timing.")
+    multi.add_argument("--interval-s", type=int, default=60, help="Expected sample interval for watchdog timing.")
     multi.add_argument("--scan-timeout", type=float, default=10.0, help="BLE scan timeout in seconds.")
     multi.add_argument("--rssi-poll-interval", type=float, default=30.0, help="Best-effort RSSI refresh cadence.")
     multi.add_argument("--temp-min-c", type=float, default=-20.0)

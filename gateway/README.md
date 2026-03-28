@@ -47,7 +47,7 @@ CSV is still available as a legacy backend or as an export format, but it is no 
 - Protocol reference: `firmware/circuitpython-pod/protocol.md`
 - BLE UUIDs and pod naming are loaded from the firmware config at runtime. The gateway does not duplicate those UUIDs across multiple code files.
 
-For the current multi-pod development and testing workflow, the firmware sample interval is set to `10` seconds and the gateway requests that interval on connect so BLE watchdog timing and synthetic-pod timing line up.
+The firmware sample interval is set back to `60` seconds by default, and the gateway requests that interval on connect so BLE and synthetic-pod timing stay aligned.
 
 ## Run Commands
 
@@ -116,7 +116,7 @@ Important options:
 - `--log-root` defaults to `data/raw`
 - `--storage` defaults to `sqlite`
 - `--db-path` defaults to `data/db/telemetry.sqlite`
-- `--interval-s` defaults to `10`
+- `--interval-s` defaults to `60`
 
 Gateway multi-mode output:
 
@@ -129,13 +129,13 @@ Gateway multi-mode output:
 
 Terminal 1: hardware pod 01
 
-- Run the Feather firmware with `SAMPLE_INTERVAL_S = 10`
+- Run the Feather firmware with `SAMPLE_INTERVAL_S = 60`
 - Pod name: `SHT45-POD-01`
 
 Terminal 2: synthetic pod 02
 
 ```powershell
-python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 10 --zone-profile entrance_disturbed --p-drop 0.1 --p-corrupt 0.05 --p-delay 0.2 --p-disconnect 0.02 --burst-loss on --verbose
+python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 60 --zone-profile entrance_disturbed --p-drop 0.1 --p-corrupt 0.05 --p-delay 0.2 --p-disconnect 0.02 --burst-loss on --verbose
 ```
 
 Terminal 3: gateway

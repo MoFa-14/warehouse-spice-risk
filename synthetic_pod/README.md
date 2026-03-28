@@ -5,7 +5,7 @@ This simulator behaves like a second pod for gateway stress testing without requ
 Run it from the repository root:
 
 ```powershell
-python .\synthetic_pod\pod2_sim.py --gateway-host 127.0.0.1 --gateway-port 8765 --pod-id 02 --interval 10 --zone-profile entrance_disturbed --verbose
+python .\synthetic_pod\pod2_sim.py --gateway-host 127.0.0.1 --gateway-port 8765 --pod-id 02 --interval 60 --zone-profile entrance_disturbed --verbose
 ```
 
 Helper script:
@@ -96,25 +96,25 @@ The existing drop/delay/corrupt/disconnect fault model is still available. If `-
 Stable interior zone:
 
 ```powershell
-python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 10 --zone-profile interior_stable --verbose
+python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 60 --zone-profile interior_stable --verbose
 ```
 
 Entrance zone with stronger disturbances:
 
 ```powershell
-python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 10 --zone-profile entrance_disturbed --event-rate-active-hours 1.8 --event-spike-rh 10 --verbose
+python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 60 --zone-profile entrance_disturbed --event-rate-active-hours 1.8 --event-spike-rh 10 --verbose
 ```
 
 Upper-rack stratified zone:
 
 ```powershell
-python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 10 --zone-profile upper_rack_stratified --base-temp 24.5 --base-rh 33 --verbose
+python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 60 --zone-profile upper_rack_stratified --base-temp 24.5 --base-rh 33 --verbose
 ```
 
 Entrance zone with bursty loss/delay:
 
 ```powershell
-python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 10 --zone-profile entrance_disturbed --p-drop 0.05 --p-delay 0.10 --burst-loss on --burst-duration-seconds 40 --burst-multiplier 3 --verbose
+python .\synthetic_pod\pod2_sim.py --gateway-port 8765 --interval 60 --zone-profile entrance_disturbed --p-drop 0.05 --p-delay 0.10 --burst-loss on --burst-duration-seconds 40 --burst-multiplier 3 --verbose
 ```
 
 ## Paper Alignment

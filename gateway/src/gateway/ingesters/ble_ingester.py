@@ -125,7 +125,7 @@ class BleIngester:
                     if isinstance(result, Exception):
                         LOGGER.debug("RSSI refresh failed for %s: %s", session.target.address, result)
                     else:
-                        self.router.update_rssi(session.stats.pod_id, "BLE", session.stats.last_rssi)
+                        self.router.update_rssi(_pod_id_from_name(session.target.name or session.target.address), "BLE", session.stats.last_rssi)
 
     def _make_sample_handler(self):
         async def _handle_sample(record, _quality_flags, stats, timestamp: str) -> None:

@@ -31,11 +31,11 @@ class BleResendController:
     session: object
 
     async def request_seq(self, pod_id: str, seq: int) -> None:
-        LOGGER.info("REQ_SEQ pod=%s seq=%s (BLE stub)", pod_id, seq)
+        LOGGER.debug("REQ_SEQ pod=%s seq=%s (BLE stub)", pod_id, seq)
         await self.session.request_resend_seq(int(seq))
 
     async def request_from_seq(self, pod_id: str, from_seq: int) -> None:
-        LOGGER.info("REQ_FROM_SEQ pod=%s from_seq=%s (BLE stub)", pod_id, from_seq)
+        LOGGER.debug("REQ_FROM_SEQ pod=%s from_seq=%s (BLE stub)", pod_id, from_seq)
         await self.session.request_resend_from_seq(int(from_seq))
 
 
@@ -47,11 +47,11 @@ class TcpResendController:
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
     async def request_seq(self, pod_id: str, seq: int) -> None:
-        LOGGER.info("REQ_SEQ pod=%s seq=%s", pod_id, seq)
+        LOGGER.debug("REQ_SEQ pod=%s seq=%s", pod_id, seq)
         await self._send({"cmd": "REQ_SEQ", "pod_id": pod_id, "seq": int(seq)})
 
     async def request_from_seq(self, pod_id: str, from_seq: int) -> None:
-        LOGGER.info("REQ_FROM_SEQ pod=%s from_seq=%s", pod_id, from_seq)
+        LOGGER.debug("REQ_FROM_SEQ pod=%s from_seq=%s", pod_id, from_seq)
         await self._send({"cmd": "REQ_FROM_SEQ", "pod_id": pod_id, "from_seq": int(from_seq)})
 
     async def _send(self, payload: dict[str, object]) -> None:

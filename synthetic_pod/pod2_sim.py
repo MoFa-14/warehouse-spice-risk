@@ -25,7 +25,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--gateway-host", default="127.0.0.1")
     parser.add_argument("--gateway-port", type=int, default=8765)
     parser.add_argument("--pod-id", default="02")
-    parser.add_argument("--interval", type=int, default=10)
+    parser.add_argument("--interval", type=int, default=60)
     parser.add_argument(
         "--zone-profile",
         choices=zone_profile_names(),

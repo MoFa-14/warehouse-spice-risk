@@ -218,6 +218,27 @@ class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(PodRouter._should_reset_sequence(stats, record))
 
+    async def test_router_detects_small_sequence_restart_when_uptime_keeps_advancing(self) -> None:
+        stats = PodStats(
+            pod_id="01",
+            source="BLE",
+            last_seq_high_water=4,
+            last_uptime_s=12846.4,
+        )
+        record = TelemetryRecord(
+            pod_id="01",
+            seq=2,
+            ts_uptime_s=12864.0,
+            temp_c=18.48,
+            rh_pct=33.32,
+            flags=0,
+            rssi=-43,
+            source="BLE",
+            ts_pc_utc="2026-03-28T19:06:20Z",
+        )
+
+        self.assertTrue(PodRouter._should_reset_sequence(stats, record))
+
 
 if __name__ == "__main__":
     unittest.main()

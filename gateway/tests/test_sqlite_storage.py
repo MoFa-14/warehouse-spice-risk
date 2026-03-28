@@ -256,6 +256,56 @@ class SqliteStorageTests(unittest.TestCase):
                 [(0, 104, 8207.6), (1, 89, 11640.7)],
             )
 
+    def test_small_sequence_restart_with_higher_uptime_opens_new_session(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            db_path = Path(temp_dir) / "telemetry.sqlite"
+            writer = SqliteStorageWriter(db_path)
+            writer.write_sample(
+                ts_pc_utc="2026-03-28T19:01:00Z",
+                record=TelemetryRecord(
+                    pod_id="01",
+                    seq=4,
+                    ts_uptime_s=12846.4,
+                    temp_c=18.43,
+                    rh_pct=33.22,
+                    flags=0,
+                ),
+                rssi=-43,
+                quality_flags=(),
+                source="BLE",
+            )
+            restarted = writer.write_sample(
+                ts_pc_utc="2026-03-28T19:06:20Z",
+                record=TelemetryRecord(
+                    pod_id="01",
+                    seq=2,
+                    ts_uptime_s=12864.0,
+                    temp_c=18.48,
+                    rh_pct=33.32,
+                    flags=0,
+                ),
+                rssi=-43,
+                quality_flags=("sequence_reset",),
+                source="BLE",
+            )
+            writer.close()
+
+            self.assertTrue(restarted.inserted)
+            self.assertFalse(restarted.duplicate)
+
+            connection = connect_sqlite(db_path, readonly=True)
+            try:
+                rows = connection.execute(
+                    "SELECT session_id, seq, ts_uptime_s FROM samples_raw WHERE pod_id = '01' ORDER BY session_id ASC, seq ASC"
+                ).fetchall()
+            finally:
+                connection.close()
+
+            self.assertEqual(
+                [(row["session_id"], row["seq"], row["ts_uptime_s"]) for row in rows],
+                [(0, 4, 12846.4), (1, 2, 12864.0)],
+            )
+
     def test_initialize_schema_moves_backfill_sessions_to_negative_range(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "telemetry.sqlite"

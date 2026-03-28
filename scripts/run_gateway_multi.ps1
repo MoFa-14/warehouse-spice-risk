@@ -11,7 +11,7 @@ $python = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $args = @(
     "-m", "gateway.cli.gateway_cli", "multi",
     "--tcp-port", $TcpPort,
-    "--interval-s", "10",
+    "--interval-s", "60",
     "--verbose"
 )
 

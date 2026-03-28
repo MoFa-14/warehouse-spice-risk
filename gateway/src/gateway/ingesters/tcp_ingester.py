@@ -48,7 +48,7 @@ class TcpIngester:
         self._server = await asyncio.start_server(self._accept_client, host=self.settings.host, port=self.settings.port)
         sockets = self._server.sockets or []
         for socket in sockets:
-            LOGGER.info("Synthetic TCP listener ready on %s", socket.getsockname())
+            LOGGER.debug("Synthetic TCP listener ready on %s", socket.getsockname())
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -73,7 +73,7 @@ class TcpIngester:
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         peer = writer.get_extra_info("peername")
-        LOGGER.info("Synthetic pod connected from %s", peer)
+        LOGGER.debug("Synthetic pod connected from %s", peer)
         controller = TcpResendController(writer)
         known_pod_id: str | None = None
         connection_registered = False
@@ -93,7 +93,7 @@ class TcpIngester:
                         continue
                     decoded = decode_telemetry_payload(payload)
                 except (DecodeError, ValueError) as exc:
-                    LOGGER.warning("Discarding corrupt TCP telemetry line from %s: %s", peer, exc)
+                    LOGGER.debug("Discarding corrupt TCP telemetry line from %s: %s", peer, exc)
                     if known_pod_id is not None:
                         await self.router.note_corrupt(known_pod_id, "TCP")
                     continue
@@ -124,7 +124,7 @@ class TcpIngester:
             with contextlib.suppress(Exception):
                 writer.close()
                 await writer.wait_closed()
-            LOGGER.warning("Synthetic pod disconnected from %s", peer)
+            LOGGER.debug("Synthetic pod disconnected from %s", peer)
 
     def _note_connection(self, pod_id: str) -> None:
         count = self._connect_counts.get(pod_id, 0) + 1

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 
-SOFT_RESET_SEQ_DROP_THRESHOLD = 5
 SOFT_RESET_UPTIME_ADVANCE_S = 15.0
 
 
@@ -21,6 +20,6 @@ def sequence_reset_detected(
         return True
     if last_seq is None or last_uptime_s is None:
         return False
-    if seq + SOFT_RESET_SEQ_DROP_THRESHOLD < last_seq and ts_uptime_s > last_uptime_s + SOFT_RESET_UPTIME_ADVANCE_S:
+    if seq < last_seq and ts_uptime_s > last_uptime_s + SOFT_RESET_UPTIME_ADVANCE_S:
         return True
     return False
