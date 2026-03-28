@@ -24,6 +24,8 @@ firmware/circuitpython-pod/lib/*
 gateway/logs/*.csv
 gateway/logs/.lock
 !gateway/logs/.gitkeep
+gateway/gateway/logs/*.csv
+gateway/gateway/logs/.lock
 
 data/raw/**
 !data/raw/.gitkeep
@@ -31,7 +33,13 @@ data/processed/**
 !data/processed/.gitkeep
 data/exports/**
 !data/exports/.gitkeep
+data/db/*.sqlite
+data/db/*.sqlite-*
+data/db/*.sqlite.lock
+data/db/.lock
+!data/db/.gitkeep
 !data/.gitkeep
+data/online/**
 
 dashboard/app/runtime/*.json
 !dashboard/app/runtime/.gitkeep

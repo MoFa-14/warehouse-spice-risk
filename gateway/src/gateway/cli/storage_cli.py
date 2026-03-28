@@ -8,7 +8,10 @@ from pathlib import Path
 from typing import Sequence
 
 from gateway.preprocess.export import export_training_dataset, preprocess_date_range
+from gateway.storage.export_csv import export_all_pods_csv, export_pod_csv
 from gateway.storage.paths import build_storage_paths
+from gateway.storage.sqlite_db import init_db, resolve_db_path
+from gateway.storage.sqlite_reader import latest_sample
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -39,6 +42,35 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Output CSV path. Defaults to data/exports/training_dataset.csv.",
     )
 
+    init_db_parser = subparsers.add_parser("init-db", help="Create the telemetry SQLite database and schema.")
+    init_db_parser.add_argument(
+        "--db-path",
+        default="data/db/telemetry.sqlite",
+        help="SQLite database path. Defaults to data/db/telemetry.sqlite.",
+    )
+
+    latest_parser = subparsers.add_parser("latest", help="Print the latest sample for one pod from SQLite.")
+    latest_parser.add_argument("--pod", required=True, help="Pod id to query.")
+    latest_parser.add_argument(
+        "--db-path",
+        default="data/db/telemetry.sqlite",
+        help="SQLite database path. Defaults to data/db/telemetry.sqlite.",
+    )
+
+    export_csv_parser = subparsers.add_parser("export-csv", help="Export SQLite raw samples into CSV files.")
+    export_scope = export_csv_parser.add_mutually_exclusive_group(required=True)
+    export_scope.add_argument("--pod", help="Pod id to export.")
+    export_scope.add_argument("--all", action="store_true", help="Export one CSV per pod.")
+    export_csv_parser.add_argument("--from", dest="date_from", required=True, help="Start UTC day for export.")
+    export_csv_parser.add_argument("--to", dest="date_to", required=True, help="End UTC day for export.")
+    export_csv_parser.add_argument("--out", help="Single CSV output path for --pod mode.")
+    export_csv_parser.add_argument("--out-dir", help="Output directory for --all mode.")
+    export_csv_parser.add_argument(
+        "--db-path",
+        default="data/db/telemetry.sqlite",
+        help="SQLite database path. Defaults to data/db/telemetry.sqlite.",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "preprocess":
@@ -54,6 +86,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             parser.error("--max-gap-minutes must be 0 or greater.")
         if args.temp_min_c >= args.temp_max_c:
             parser.error("--temp-min-c must be lower than --temp-max-c.")
+    elif args.command == "export-csv":
+        if args.all and args.out:
+            parser.error("export-csv does not allow --out together with --all.")
+        if args.pod and args.out_dir:
+            parser.error("export-csv does not allow --out-dir together with --pod.")
 
     return args
 
@@ -84,14 +121,67 @@ def cli(argv: Sequence[str] | None = None) -> int:
             print(path)
         return 0
 
-    out_path = Path(args.out) if args.out is not None else storage_paths.training_export_path()
-    result = export_training_dataset(
-        data_root=storage_paths.root,
-        date_from=date.fromisoformat(args.date_from),
-        date_to=date.fromisoformat(args.date_to),
-        out_path=out_path,
+    if args.command == "export-training":
+        out_path = Path(args.out) if args.out is not None else storage_paths.training_export_path()
+        result = export_training_dataset(
+            data_root=storage_paths.root,
+            date_from=date.fromisoformat(args.date_from),
+            date_to=date.fromisoformat(args.date_to),
+            out_path=out_path,
+        )
+        print(result)
+        return 0
+
+    if args.command == "init-db":
+        print(init_db(args.db_path))
+        return 0
+
+    if args.command == "latest":
+        db_path = resolve_db_path(args.db_path)
+        if not db_path.exists():
+            print(f"Database not found: {db_path}")
+            return 1
+        row = latest_sample(pod_id=args.pod, db_path=db_path)
+        if row is None:
+            print(f"No samples found for pod {args.pod}")
+            return 1
+        print(
+            "ts_pc_utc={ts} pod_id={pod} seq={seq} temp_c={temp} rh_pct={rh} source={source}".format(
+                ts=row["ts_pc_utc"],
+                pod=row["pod_id"],
+                seq=row["seq"],
+                temp=row["temp_c"],
+                rh=row["rh_pct"],
+                source=row.get("source") or "-",
+            )
+        )
+        return 0
+
+    date_from = date.fromisoformat(args.date_from)
+    date_to = date.fromisoformat(args.date_to)
+    db_path = resolve_db_path(args.db_path)
+    if not db_path.exists():
+        print(f"Database not found: {db_path}")
+        return 1
+    if args.all:
+        outputs = export_all_pods_csv(
+            date_from=date_from,
+            date_to=date_to,
+            out_dir=args.out_dir,
+            db_path=db_path,
+        )
+        for output in outputs:
+            print(output)
+        return 0
+
+    output = export_pod_csv(
+        pod_id=args.pod,
+        date_from=date_from,
+        date_to=date_to,
+        out_path=args.out,
+        db_path=db_path,
     )
-    print(result)
+    print(output)
     return 0
 
 

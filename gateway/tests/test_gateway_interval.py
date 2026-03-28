@@ -87,7 +87,7 @@ class GatewayCommandTests(unittest.IsolatedAsyncioTestCase):
     async def test_gateway_does_not_send_control_without_command_or_mismatch(self) -> None:
         session = self._build_session()
         fake_client = object()
-        status = StatusRecord(firmware_version="0.1.0", last_error=0, sample_interval_s=5)
+        status = StatusRecord(firmware_version="0.1.0", last_error=0, sample_interval_s=10)
 
         with patch("gateway.ble.client.write_control_command", new=AsyncMock()) as mock_write:
             command_sent = await session._maybe_send_command(fake_client)
@@ -107,7 +107,7 @@ class GatewayCommandTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(command_sent)
         mock_write.assert_awaited_once_with(fake_client, session.profile, "REQ_FROM_SEQ:123")
 
-    async def test_gateway_enforces_five_second_interval_when_pod_reports_sixty(self) -> None:
+    async def test_gateway_enforces_ten_second_interval_when_pod_reports_sixty(self) -> None:
         session = self._build_session()
         fake_client = object()
         status = StatusRecord(firmware_version="0.1.0", last_error=0, sample_interval_s=60)
@@ -116,10 +116,10 @@ class GatewayCommandTests(unittest.IsolatedAsyncioTestCase):
             interval_updated = await session._maybe_enforce_sample_interval(fake_client, status)
 
         self.assertTrue(interval_updated)
-        mock_write.assert_awaited_once_with(fake_client, session.profile, "SET_INTERVAL:5")
+        mock_write.assert_awaited_once_with(fake_client, session.profile, "SET_INTERVAL:10")
 
     async def test_gateway_does_not_double_send_when_user_explicitly_sets_interval(self) -> None:
-        session = self._build_session(send_command="SET_INTERVAL:5")
+        session = self._build_session(send_command="SET_INTERVAL:10")
         fake_client = object()
         status = StatusRecord(firmware_version="0.1.0", last_error=0, sample_interval_s=60)
 

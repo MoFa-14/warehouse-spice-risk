@@ -5,11 +5,16 @@ from __future__ import annotations
 from datetime import date
 from pathlib import Path
 
+from app.data_access.sqlite_reader import discover_pod_ids_from_sqlite, sqlite_db_exists
 
-def discover_pod_ids(data_root: Path) -> list[str]:
+
+def discover_pod_ids(data_root: Path, *, db_path: Path | None = None) -> list[str]:
     """Return pod ids discovered under raw and processed pod folders."""
     roots = [Path(data_root) / "raw" / "pods", Path(data_root) / "processed" / "pods"]
     pod_ids: set[str] = set()
+    candidate_db_path = Path(db_path) if db_path is not None else Path(data_root) / "db" / "telemetry.sqlite"
+    if sqlite_db_exists(candidate_db_path):
+        pod_ids.update(discover_pod_ids_from_sqlite(candidate_db_path))
     for root in roots:
         if not root.exists():
             continue

@@ -8,14 +8,24 @@ from app.data_access.file_finder import (
     find_raw_pod_files,
     latest_file,
 )
+from app.data_access.sqlite_reader import (
+    discover_pod_ids_from_sqlite,
+    read_link_quality_sqlite,
+    read_raw_samples_sqlite,
+    sqlite_db_exists,
+)
 
 __all__ = [
     "discover_pod_ids",
+    "discover_pod_ids_from_sqlite",
     "find_link_quality_files",
     "find_processed_pod_files",
     "find_raw_pod_files",
     "latest_file",
     "read_link_quality",
+    "read_link_quality_sqlite",
     "read_processed_samples",
     "read_raw_samples",
+    "read_raw_samples_sqlite",
+    "sqlite_db_exists",
 ]

@@ -94,7 +94,11 @@ def _register_routes(app: Flask) -> None:
     @app.get("/pods/<pod_id>")
     def pod_detail(pod_id: str):
         readings, alert_snapshot = _base_context(app)
-        reading = get_latest_pod_reading(Path(app.config["DATA_ROOT"]), pod_id)
+        reading = get_latest_pod_reading(
+            Path(app.config["DATA_ROOT"]),
+            pod_id,
+            db_path=Path(app.config["DB_PATH"]),
+        )
         if reading is None:
             abort(404)
         window = resolve_time_window(
@@ -107,6 +111,7 @@ def _register_routes(app: Flask) -> None:
             pod_id,
             window,
             max_points=int(app.config["MAX_CHART_POINTS"]),
+            db_path=Path(app.config["DB_PATH"]),
         )
         preset_ranges = [("1h", "1h"), ("6h", "6h"), ("24h", "24h"), ("7d", "7d")]
         return render_template(
@@ -125,7 +130,7 @@ def _register_routes(app: Flask) -> None:
     @app.get("/health")
     def health():
         readings, alert_snapshot = _base_context(app)
-        health_context = build_health_context(Path(app.config["DATA_ROOT"]))
+        health_context = build_health_context(Path(app.config["DATA_ROOT"]), db_path=Path(app.config["DB_PATH"]))
         return render_template(
             "health.html",
             page_title="Health",
@@ -170,7 +175,10 @@ def _register_routes(app: Flask) -> None:
 
 
 def _base_context(app: Flask):
-    readings = get_latest_pod_readings(Path(app.config["DATA_ROOT"]))
+    readings = get_latest_pod_readings(
+        Path(app.config["DATA_ROOT"]),
+        db_path=Path(app.config["DB_PATH"]),
+    )
     alert_snapshot = build_alert_snapshot(
         readings,
         Path(app.config["ACKS_FILE"]),

@@ -14,6 +14,7 @@ class DashboardConfig:
     RAW_ROOT = DATA_ROOT / "raw"
     PROCESSED_ROOT = DATA_ROOT / "processed"
     EXPORTS_ROOT = DATA_ROOT / "exports"
+    DB_PATH = DATA_ROOT / "db" / "telemetry.sqlite"
     RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
     ACKS_FILE = RUNTIME_DIR / "acks.json"
     ACK_MINUTES = 30

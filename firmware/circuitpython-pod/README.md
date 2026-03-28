@@ -76,11 +76,11 @@ After copying:
 ## Runtime Behavior
 
 - Advertises as `SHT45-POD-XX` where `XX` comes from `POD_ID` in `config.py`
-- Samples the SHT45 once every 5 seconds for the current development/testing phase
+- Samples the SHT45 once every 10 seconds for the current development/testing phase
 - Maintains a monotonic sequence counter starting at `1` on each boot
 - Stores the last `N` samples in an in-memory ring buffer (`RING_BUFFER_SIZE`, default `120`)
 - Keeps sampling while disconnected
-- On BLE connection, re-notifies the most recent telemetry payload once, then continues five-second telemetry notifications
+- On BLE connection, re-notifies the most recent telemetry payload once, then continues 10-second telemetry notifications
 - The target production/default cadence can be moved back to 60 seconds later by updating `SAMPLE_INTERVAL_S`
 
 ## BLE Test With nRF Connect Or BLE Explorer
@@ -95,7 +95,7 @@ After copying:
    - Status (`READ`): `7f12b100-7c2d-4b6a-8f4b-8a1f0e3c0004`
 5. Read the Status characteristic and confirm the returned compact value `firmware_version,last_sensor_error_code,current_interval_s`.
 6. Subscribe to Telemetry notifications immediately after connecting.
-7. Confirm you receive one latest-sample notification right after subscribe/connect and then a new notification every 5 seconds.
+7. Confirm you receive one latest-sample notification right after subscribe/connect and then a new notification every 10 seconds.
 
 Example telemetry payload:
 
@@ -106,7 +106,7 @@ Example telemetry payload:
 Example status payload:
 
 ```text
-0.1.0-phase1,0,5
+0.1.0-phase1,0,10
 ```
 
 ## Gateway Integration Note

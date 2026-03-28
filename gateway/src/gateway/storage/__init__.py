@@ -1,13 +1,10 @@
-"""Layer 3 storage primitives for raw telemetry and link metrics."""
+"""Gateway storage package.
 
-from gateway.storage.link_writer import LinkQualityWriter
+Keep package-level imports intentionally light so submodule imports like
+`gateway.storage.sqlite_db` do not drag in the CSV writers and create
+import-order cycles during startup or tests.
+"""
+
 from gateway.storage.paths import StoragePaths, build_storage_paths
-from gateway.storage.raw_writer import RawTelemetryWriter, RawWriteResult
 
-__all__ = [
-    "LinkQualityWriter",
-    "RawTelemetryWriter",
-    "RawWriteResult",
-    "StoragePaths",
-    "build_storage_paths",
-]
+__all__ = ["StoragePaths", "build_storage_paths"]

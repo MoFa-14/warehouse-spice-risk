@@ -55,6 +55,13 @@ class StoragePaths:
     def exports_root(self) -> Path:
         return self.root / "exports"
 
+    @property
+    def db_root(self) -> Path:
+        return self.root / "db"
+
+    def telemetry_db_path(self) -> Path:
+        return self.db_root / "telemetry.sqlite"
+
     def raw_pod_day_path(self, pod_id: str, day: date) -> Path:
         return self.raw_pods_root / pod_id / f"{day.isoformat()}.csv"
 
@@ -72,6 +79,7 @@ class StoragePaths:
         self.raw_root.mkdir(parents=True, exist_ok=True)
         self.processed_root.mkdir(parents=True, exist_ok=True)
         self.exports_root.mkdir(parents=True, exist_ok=True)
+        self.db_root.mkdir(parents=True, exist_ok=True)
 
 
 def default_data_root() -> Path:

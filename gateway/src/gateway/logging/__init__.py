@@ -1,11 +1,7 @@
-"""CSV logging helpers for gateway outputs."""
+"""Gateway logging package.
 
-from gateway.logging.csv_logger import GatewayCsvLogger
-from gateway.logging.process_lock import GatewayProcessLock
-from gateway.logging.writer_pipeline import GatewayWriterPipeline
+Keep package initialization minimal so importing one logging submodule does not
+eagerly import the others and accidentally pull in storage modules too early.
+"""
 
-__all__ = [
-    "GatewayCsvLogger",
-    "GatewayProcessLock",
-    "GatewayWriterPipeline",
-]
+__all__: list[str] = []

@@ -24,6 +24,9 @@ from gateway.utils.timeutils import utc_now, utc_now_iso
 
 LOGGER = logging.getLogger(__name__)
 SampleHandler = Callable[[TelemetryRecord, tuple[str, ...], LinkStats, str], Awaitable[None]]
+CorruptHandler = Callable[[], Awaitable[None]]
+ConnectHandler = Callable[[bool], Awaitable[None]]
+DisconnectHandler = Callable[[], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -44,11 +47,17 @@ class PodSession:
         settings: GatewaySettings,
         profile: GattProfile,
         sample_handler: SampleHandler,
+        corrupt_handler: CorruptHandler | None = None,
+        connect_handler: ConnectHandler | None = None,
+        disconnect_handler: DisconnectHandler | None = None,
     ) -> None:
         self.target = target
         self.settings = settings
         self.profile = profile
         self.sample_handler = sample_handler
+        self.corrupt_handler = corrupt_handler
+        self.connect_handler = connect_handler
+        self.disconnect_handler = disconnect_handler
         self.stats = LinkStats(pod_label=target.name or target.address)
         self._client: BleakClient | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -100,6 +109,8 @@ class PodSession:
                 self._reset_watchdog_state(clear_telemetry=False)
                 backoff.reset()
                 self._logger.info("Connected to %s (%s)", scan_match.name, scan_match.address)
+                if self.connect_handler is not None:
+                    await self.connect_handler(self.stats.reconnect_count > 0)
 
                 await client.start_notify(self.profile.telemetry_char_uuid, self._handle_notification)
                 await self._synchronize_runtime(client)
@@ -191,7 +202,7 @@ class PodSession:
         return True
 
     async def _maybe_enforce_sample_interval(self, client: BleakClient, status: StatusRecord | None) -> bool:
-        desired_interval_s = int(self.settings.firmware.sample_interval_s)
+        desired_interval_s = int(self.settings.sample_interval_s)
         if desired_interval_s <= 0:
             return False
         if self._has_explicit_interval_command():
@@ -227,6 +238,8 @@ class PodSession:
                     record = decode_telemetry_payload(message)
                 except DecodeError as exc:
                     self._logger.warning("Discarding malformed telemetry from %s: %s", self.target.address, exc)
+                    if self.corrupt_handler is not None:
+                        await self.corrupt_handler()
                     continue
 
                 self._last_telemetry_time_utc = utc_now()
@@ -324,8 +337,23 @@ class PodSession:
         self._connected_since_utc = None
         self._reset_watchdog_state()
         self.stats.mark_disconnected()
+        if self.disconnect_handler is not None and self._loop is not None:
+            task = self._loop.create_task(self.disconnect_handler())
+            task.add_done_callback(self._log_background_callback_exception)
         self._disconnected_event.set()
         self._logger.warning("Disconnected from %s", self.target.address)
+
+    def _log_background_callback_exception(self, task: asyncio.Task[None]) -> None:
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception as exc:
+            self._logger.error(
+                "Background callback failed for %s",
+                self.target.address,
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
 
     async def _telemetry_watchdog_loop(self) -> None:
         while not self._stop_event.is_set() and not self._disconnected_event.is_set():
@@ -423,16 +451,36 @@ class PodSession:
             self._last_telemetry_time_utc = None
 
     def _telemetry_stall_timeout_s(self) -> float:
-        return (2.0 * float(self.settings.firmware.sample_interval_s)) + 5.0
+        return (2.0 * float(self.settings.sample_interval_s)) + 5.0
 
     def _telemetry_reconnect_timeout_s(self) -> float:
-        return max(float(self.settings.firmware.sample_interval_s) + 5.0, 5.0)
+        return max(float(self.settings.sample_interval_s) + 5.0, 5.0)
 
     def _watchdog_poll_interval_s(self) -> float:
-        return max(1.0, min(5.0, float(self.settings.firmware.sample_interval_s)))
+        return max(1.0, min(5.0, float(self.settings.sample_interval_s)))
 
     def _seconds_since_last_telemetry(self, now: datetime) -> float:
         reference_time = self._last_telemetry_time_utc or self._connected_since_utc
         if reference_time is None:
             return 0.0
         return max((now - reference_time).total_seconds(), 0.0)
+
+    async def request_resend_seq(self, seq: int) -> None:
+        """Best-effort resend request written to the pod control characteristic."""
+        client = self._client
+        if client is None or not getattr(client, "is_connected", False):
+            self._logger.info("BLE resend requested (stub) seq=%s but client is not connected", seq)
+            return
+        command = f"REQ_SEQ:{int(seq)}"
+        await write_control_command(client, self.profile, command)
+        self._logger.info("BLE resend requested (stub) seq=%s", seq)
+
+    async def request_resend_from_seq(self, from_seq: int) -> None:
+        """Best-effort resend range request written to the pod control characteristic."""
+        client = self._client
+        if client is None or not getattr(client, "is_connected", False):
+            self._logger.info("BLE resend requested (stub) from_seq=%s but client is not connected", from_seq)
+            return
+        command = f"REQ_FROM_SEQ:{int(from_seq)}"
+        await write_control_command(client, self.profile, command)
+        self._logger.info("BLE resend requested (stub) from_seq=%s", from_seq)

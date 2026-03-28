@@ -1,1 +1,1 @@
-"""CLI entrypoints for offline Layer 3 storage tasks."""
+"""CLI entrypoints for storage and multi-pod gateway tasks."""

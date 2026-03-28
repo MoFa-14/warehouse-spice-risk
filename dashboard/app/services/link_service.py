@@ -10,6 +10,7 @@ import pandas as pd
 
 from app.data_access.csv_reader import read_link_quality, read_raw_samples
 from app.data_access.file_finder import discover_pod_ids, find_link_quality_files, find_raw_pod_files
+from app.data_access.sqlite_reader import read_link_quality_sqlite, read_raw_samples_sqlite, sqlite_db_exists
 
 
 @dataclass(frozen=True)
@@ -27,15 +28,15 @@ class LinkHealthRow:
     missing_rate: float | None
 
 
-def build_health_context(data_root: Path) -> dict[str, object]:
+def build_health_context(data_root: Path, *, db_path: Path | None = None) -> dict[str, object]:
     """Build a health summary from raw and optional link-quality CSV files."""
     data_root = Path(data_root)
-    pod_ids = discover_pod_ids(data_root)
-    link_frame = read_link_quality(find_link_quality_files(data_root))
+    pod_ids = discover_pod_ids(data_root, db_path=db_path)
+    link_frame = _load_link_frame(data_root, db_path=db_path)
 
     rows: list[LinkHealthRow] = []
     for pod_id in pod_ids:
-        latest_raw = _latest_raw_row(data_root, pod_id)
+        latest_raw = _latest_raw_row(data_root, pod_id, db_path=db_path)
         latest_link = _latest_link_row(link_frame, pod_id)
         rows.append(
             LinkHealthRow(
@@ -63,8 +64,8 @@ def build_health_context(data_root: Path) -> dict[str, object]:
     }
 
 
-def _latest_raw_row(data_root: Path, pod_id: str):
-    frame = read_raw_samples(find_raw_pod_files(data_root, pod_id))
+def _latest_raw_row(data_root: Path, pod_id: str, *, db_path: Path | None = None):
+    frame = _load_raw_frame(data_root, pod_id, db_path=db_path)
     if frame.empty:
         return None
     return frame.sort_values("ts_pc_utc").iloc[-1]
@@ -92,3 +93,15 @@ def _float_or_none(value) -> float | None:
     if value is None or pd.isna(value):
         return None
     return float(value)
+
+
+def _load_raw_frame(data_root: Path, pod_id: str, *, db_path: Path | None = None) -> pd.DataFrame:
+    if db_path is not None and sqlite_db_exists(db_path):
+        return read_raw_samples_sqlite(db_path, pod_id=pod_id)
+    return read_raw_samples(find_raw_pod_files(data_root, pod_id))
+
+
+def _load_link_frame(data_root: Path, *, db_path: Path | None = None) -> pd.DataFrame:
+    if db_path is not None and sqlite_db_exists(db_path):
+        return read_link_quality_sqlite(db_path)
+    return read_link_quality(find_link_quality_files(data_root))

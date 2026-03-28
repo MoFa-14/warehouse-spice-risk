@@ -12,6 +12,7 @@ from plotly.offline import get_plotlyjs
 
 from app.data_access.csv_reader import read_processed_samples, read_raw_samples
 from app.data_access.file_finder import find_processed_pod_files, find_raw_pod_files
+from app.data_access.sqlite_reader import read_raw_samples_sqlite, sqlite_db_exists
 
 
 RANGE_OPTIONS = {
@@ -50,12 +51,19 @@ def resolve_time_window(range_key: str | None, start_text: str | None, end_text:
     return TimeWindow(key=resolved_key, label=resolved_key.upper(), start=now - delta, end=now, custom=False)
 
 
-def build_timeseries_context(data_root: Path, pod_id: str, window: TimeWindow, *, max_points: int) -> dict[str, object]:
+def build_timeseries_context(
+    data_root: Path,
+    pod_id: str,
+    window: TimeWindow,
+    *,
+    max_points: int,
+    db_path: Path | None = None,
+) -> dict[str, object]:
     """Load time-series data and render Plotly charts for a pod."""
     date_from = window.start.date()
     date_to = window.end.date()
 
-    raw_frame = read_raw_samples(find_raw_pod_files(Path(data_root), pod_id, date_from=date_from, date_to=date_to))
+    raw_frame = _load_raw_frame(Path(data_root), pod_id, date_from=date_from, date_to=date_to, db_path=db_path)
     processed_frame = read_processed_samples(
         find_processed_pod_files(Path(data_root), pod_id, date_from=date_from, date_to=date_to)
     )
@@ -109,6 +117,19 @@ def _dewpoint_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> p
     if not processed_frame.empty and "dew_point_c" in processed_frame.columns:
         return processed_frame[["ts_pc_utc", "dew_point_c"]].rename(columns={"dew_point_c": "value"}).dropna()
     return pd.DataFrame(columns=["ts_pc_utc", "value"])
+
+
+def _load_raw_frame(
+    data_root: Path,
+    pod_id: str,
+    *,
+    date_from,
+    date_to,
+    db_path: Path | None = None,
+) -> pd.DataFrame:
+    if db_path is not None and sqlite_db_exists(db_path):
+        return read_raw_samples_sqlite(db_path, pod_id=pod_id, date_from=date_from, date_to=date_to)
+    return read_raw_samples(find_raw_pod_files(Path(data_root), pod_id, date_from=date_from, date_to=date_to))
 
 
 def _filter_window(frame: pd.DataFrame, window: TimeWindow) -> pd.DataFrame:

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import csv
 import math
+import sqlite3
 import sys
 import unittest
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -22,26 +24,83 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         self.data_root = base / "data"
         (self.data_root / "raw" / "pods" / "01").mkdir(parents=True, exist_ok=True)
         (self.data_root / "raw" / "link_quality").mkdir(parents=True, exist_ok=True)
+        (self.data_root / "db").mkdir(parents=True, exist_ok=True)
         runtime_dir = base / "runtime"
         runtime_dir.mkdir(parents=True, exist_ok=True)
         now = datetime.now(timezone.utc).replace(microsecond=0)
         day = now.date().isoformat()
         dew_point = self._dew_point_c(25.2, 65.0)
+        db_path = self.data_root / "db" / "telemetry.sqlite"
 
         with (self.data_root / "raw" / "pods" / "01" / f"{day}.csv").open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(["ts_pc_utc", "pod_id", "seq", "ts_uptime_s", "temp_c", "rh_pct", "dew_point_c", "flags", "rssi", "quality_flags"])
-            writer.writerow([now.isoformat().replace("+00:00", "Z"), "01", 1, 5.0, 25.2, 65.0, f"{dew_point:.6f}", 0, -43, 0])
+            writer.writerow([now.isoformat().replace("+00:00", "Z"), "01", 1, 5.0, 19.0, 40.0, f"{self._dew_point_c(19.0, 40.0):.6f}", 0, -43, 0])
 
         with (self.data_root / "raw" / "link_quality" / f"{day}.csv").open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(["ts_pc_utc", "pod_id", "connected", "last_rssi", "total_received", "total_missing", "total_duplicates", "disconnect_count", "reconnect_count", "missing_rate"])
             writer.writerow([now.isoformat().replace("+00:00", "Z"), "01", 1, -43, 1, 0, 0, 0, 0, 0.0])
 
+        with closing(sqlite3.connect(db_path)) as connection:
+            connection.execute(
+                """
+                CREATE TABLE samples_raw (
+                    ts_pc_utc TEXT NOT NULL,
+                    pod_id TEXT NOT NULL,
+                    session_id INTEGER NOT NULL DEFAULT 0,
+                    seq INTEGER NOT NULL,
+                    ts_uptime_s REAL,
+                    temp_c REAL,
+                    rh_pct REAL,
+                    flags INTEGER,
+                    rssi INTEGER,
+                    quality_flags TEXT,
+                    source TEXT,
+                    PRIMARY KEY (pod_id, session_id, seq)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE link_quality (
+                    ts_pc_utc TEXT NOT NULL,
+                    pod_id TEXT NOT NULL,
+                    connected INTEGER,
+                    last_rssi INTEGER,
+                    total_received INTEGER,
+                    total_missing INTEGER,
+                    total_duplicates INTEGER,
+                    disconnect_count INTEGER,
+                    reconnect_count INTEGER,
+                    missing_rate REAL
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO samples_raw (
+                    ts_pc_utc, pod_id, session_id, seq, ts_uptime_s, temp_c, rh_pct, flags, rssi, quality_flags, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (now.isoformat().replace("+00:00", "Z"), "01", 0, 7, 50.0, 25.2, 65.0, 0, -43, "", "BLE"),
+            )
+            connection.execute(
+                """
+                INSERT INTO link_quality (
+                    ts_pc_utc, pod_id, connected, last_rssi, total_received, total_missing,
+                    total_duplicates, disconnect_count, reconnect_count, missing_rate
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (now.isoformat().replace("+00:00", "Z"), "01", 1, -43, 7, 0, 0, 0, 0, 0.0),
+            )
+            connection.commit()
+
         self.app = create_app(
             {
                 "TESTING": True,
                 "DATA_ROOT": self.data_root,
+                "DB_PATH": db_path,
                 "ACKS_FILE": runtime_dir / "acks.json",
                 "RUNTIME_DIR": runtime_dir,
                 "SECRET_KEY": "test-key",

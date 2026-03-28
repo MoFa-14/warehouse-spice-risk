@@ -4,20 +4,21 @@ This package implements the Flask dashboard and presentation layer for Warehouse
 
 Scope limits for this phase:
 
-- Reads CSV files only
+- Reads live telemetry from SQLite, with processed CSVs used when available
 - Uses rule-based alerts only
 - Does not include machine learning, forecasting, anomaly detection, or model training
 - The Prediction page is intentionally a placeholder
 
 ## Expected Data Layout
 
-The dashboard reads CSV data from the repository `data/` folder:
+The dashboard reads data from the repository `data/` folder:
 
+- Primary live source: `data/db/telemetry.sqlite`
 - `data/raw/pods/<pod_id>/YYYY-MM-DD.csv`
 - `data/raw/link_quality/YYYY-MM-DD.csv` (optional)
 - `data/processed/pods/<pod_id>/YYYY-MM-DD_processed.csv` (optional)
 
-The dashboard works with raw data only. Processed and link-quality files are used when available.
+The dashboard now prefers live SQLite data for raw telemetry and link quality. Processed CSV files are still used when available for cleaned historical views. If the SQLite database is missing, the dashboard falls back to the raw/link CSV files.
 
 ## Install
 
@@ -43,6 +44,8 @@ cd .\dashboard
 ```
 
 Open `http://127.0.0.1:5000` in your browser.
+
+Once this SQLite-aware code is running, you do not need to restart Flask for each new sensor reading. The dashboard queries the database on each request, and the UI auto-refreshes every 5 seconds by default. You only need to restart the dashboard once after changing the dashboard code itself.
 
 ## Pages
 
@@ -80,7 +83,7 @@ This is a lightweight UI-only mute for 30 minutes by default. It does not affect
 ## Notes
 
 - Alerts are rule-based only in this phase.
-- Dew point is displayed from raw CSVs when present, with processed CSVs used as a fallback.
+- Dew point is displayed from live SQLite raw readings by computing it from temperature and humidity, with processed CSVs still used as an optional fallback.
 - If the newest sample is incomplete, the dashboard shows the latest sample timestamp and also shows the last complete measurement timestamp for context.
 - Dew point does not generate alerts yet.
 - Prediction is placeholder-only and no ML code is included.

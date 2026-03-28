@@ -15,10 +15,11 @@ from gateway.ble.client import PodSession, PodTarget
 from gateway.ble.gatt import ensure_profile_present, iter_service_lines, profile_from_firmware
 from gateway.ble.scanner import discover_matches, resolve_device
 from gateway.config import GatewaySettings, build_settings
-from gateway.logging.process_lock import GatewayProcessLock
+from gateway.logging.process_lock import GatewayProcessLock, build_lock_path
 from gateway.logging.writer_pipeline import GatewayWriterPipeline
 from gateway.protocol.decoder import TelemetryRecord
-from gateway.storage import build_storage_paths
+from gateway.storage.paths import build_storage_paths
+from gateway.storage.sqlite_writer import SqliteWriterPipeline
 from gateway.utils.timeutils import utc_now_iso
 
 
@@ -37,6 +38,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--duration", type=float, help="Run for N seconds, then exit. Omit to run until stopped.")
     parser.add_argument("--log-dir", default="gateway/logs", help="Directory for samples.csv and link_quality.csv.")
+    parser.add_argument(
+        "--storage",
+        choices=("sqlite", "csv"),
+        default="sqlite",
+        help="Primary storage backend. Defaults to sqlite.",
+    )
+    parser.add_argument(
+        "--db-path",
+        default="data/db/telemetry.sqlite",
+        help="SQLite database path used when --storage sqlite.",
+    )
     parser.add_argument("--send", help="Optional control command stub, for example PING or REQ_FROM_SEQ:123.")
     parser.add_argument("--scan-timeout", type=float, default=10.0, help="BLE scan timeout in seconds.")
     parser.add_argument("--metrics-interval", type=float, default=30.0, help="Link snapshot cadence in seconds.")
@@ -77,9 +89,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def configure_logging(verbose: bool) -> None:
     """Set up a concise console logger for the gateway runtime."""
     logging.basicConfig(
-        level=logging.DEBUG if verbose else logging.INFO,
+        level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    logging.getLogger("gateway").setLevel(logging.DEBUG if verbose else logging.INFO)
+    logging.getLogger("bleak").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 
 async def resolve_initial_targets(settings: GatewaySettings) -> list[PodTarget]:
@@ -170,14 +185,19 @@ async def run_dump_services(settings: GatewaySettings) -> int:
 
 
 class GatewayRuntime:
-    """Coordinate pod sessions, periodic RSSI refreshes, and CSV logging."""
+    """Coordinate pod sessions, periodic RSSI refreshes, and persistent logging."""
 
     def __init__(self, settings: GatewaySettings) -> None:
         self.settings = settings
         self.profile = profile_from_firmware(settings.firmware)
         self.storage_paths = build_storage_paths()
-        self.writer_pipeline: GatewayWriterPipeline | None = None
-        self.process_lock = GatewayProcessLock(self.settings.log_dir / ".lock")
+        self.writer_pipeline: GatewayWriterPipeline | SqliteWriterPipeline | None = None
+        lock_target = self.settings.db_path if self.settings.storage_backend == "sqlite" else self.settings.log_dir
+        compatibility_lock_paths = (self.settings.db_path.parent / ".lock",) if self.settings.storage_backend == "sqlite" else ()
+        self.process_lock = GatewayProcessLock(
+            build_lock_path(lock_target),
+            compatibility_lock_paths=compatibility_lock_paths,
+        )
         self.sessions: list[PodSession] = []
         self._stop_event = asyncio.Event()
         self._fatal_task_error: BaseException | None = None
@@ -185,9 +205,13 @@ class GatewayRuntime:
     async def run(self, duration_s: float | None) -> int:
         """Run the receiver until the duration elapses or the user stops it."""
         LOGGER.info("Using firmware config: %s", self.settings.firmware.config_path)
-        LOGGER.info("Legacy logs will be written to %s", self.settings.log_dir)
-        LOGGER.info("Canonical Layer 3 data root: %s", self.storage_paths.root)
-        LOGGER.info("Requested pod sample interval: %ss", self.settings.firmware.sample_interval_s)
+        LOGGER.info("Storage backend: %s", self.settings.storage_backend)
+        if self.settings.storage_backend == "sqlite":
+            LOGGER.info("Primary SQLite DB: %s", self.settings.db_path)
+        else:
+            LOGGER.info("Legacy logs will be written to %s", self.settings.log_dir)
+            LOGGER.info("Canonical Layer 3 data root: %s", self.storage_paths.root)
+        LOGGER.info("Requested pod sample interval: %ss", self.settings.sample_interval_s)
         try:
             self.process_lock.acquire()
         except RuntimeError as exc:
@@ -204,10 +228,7 @@ class GatewayRuntime:
                 LOGGER.warning("No matching pods found to connect.")
                 return 1
 
-            self.writer_pipeline = GatewayWriterPipeline(
-                storage_root=self.storage_paths.root,
-                log_dir=self.settings.log_dir,
-            )
+            self.writer_pipeline = self._build_writer_pipeline()
             self.writer_pipeline.start()
             self.sessions = [
                 PodSession(
@@ -255,6 +276,14 @@ class GatewayRuntime:
             self.process_lock.release()
 
         return 1 if self._fatal_task_error is not None else 0
+
+    def _build_writer_pipeline(self) -> GatewayWriterPipeline | SqliteWriterPipeline:
+        if self.settings.storage_backend == "sqlite":
+            return SqliteWriterPipeline(db_path=self.settings.db_path)
+        return GatewayWriterPipeline(
+            storage_root=self.storage_paths.root,
+            log_dir=self.settings.log_dir,
+        )
 
     async def handle_sample(
         self,
@@ -344,6 +373,8 @@ async def async_main(args: argparse.Namespace) -> int:
         temp_max_c=args.temp_max_c,
         send_command=args.send,
         use_cached_services=args.use_cached_services,
+        storage_backend=args.storage,
+        db_path=args.db_path,
     )
 
     if args.scan_only:

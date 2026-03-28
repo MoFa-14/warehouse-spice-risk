@@ -39,7 +39,7 @@ firmware_version,last_sensor_error_code,current_interval_s
 Current development/testing example:
 
 ```text
-0.1.0-phase1,0,5
+0.1.0-phase1,0,10
 ```
 
 Sensor error code meanings:
@@ -66,7 +66,7 @@ The Control characteristic accepts simple UTF-8 text commands. Phase 1 only incl
 - `SET_INTERVAL:<seconds>` or `SET_INTERVAL=<seconds>`
   - Updates the in-memory sample interval for the current boot session
   - Allowed range: `5` to `3600` seconds
-  - The gateway currently requests `SET_INTERVAL:5` during development/testing so the pod emits readings every five seconds and the gateway stores them at that cadence
+  - The gateway currently requests `SET_INTERVAL:10` during development/testing so the pod emits readings every ten seconds and the gateway stores them at that cadence
 
 Unknown or malformed commands are ignored after logging to the serial console.
 
