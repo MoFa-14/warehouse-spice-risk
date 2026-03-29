@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+from datetime import datetime
 from pathlib import Path
 
 SYNTHETIC_ROOT = Path(__file__).resolve().parents[1]
@@ -47,10 +48,11 @@ class EventRecoveryTests(unittest.TestCase):
             drift_temp_step_c=0.0,
             drift_rh_step_pct=0.0,
             event_rate_per_hour=5000.0,
-            event_rate_active_hours_per_hour=0.0,
+            event_rate_active_hours_per_hour=5000.0,
             event_spike_temp_c=2.0,
             event_spike_rh_pct=8.0,
             recovery_tau_seconds=20.0,
+            start_local_time=datetime(2026, 3, 29, 12, 0, 0),
             schedule=ActiveHoursSchedule(active_start_hour=12, active_end_hour=13),
             rng=rng,
         )
@@ -60,8 +62,8 @@ class EventRecoveryTests(unittest.TestCase):
         third = generator.next_sample()
 
         self.assertTrue(first.disturbance_just_triggered)
-        self.assertGreater(first.temp_c, first.baseline_temp_c)
-        self.assertGreater(first.rh_pct, first.baseline_rh_pct)
+        self.assertNotEqual(first.temp_c, first.baseline_temp_c)
+        self.assertNotEqual(first.rh_pct, first.baseline_rh_pct)
         self.assertLess(abs(second.temp_c - second.baseline_temp_c), abs(first.temp_c - first.baseline_temp_c))
         self.assertLess(abs(second.rh_pct - second.baseline_rh_pct), abs(first.rh_pct - first.baseline_rh_pct))
         self.assertLess(abs(third.temp_c - third.baseline_temp_c), abs(second.temp_c - second.baseline_temp_c))

@@ -8,6 +8,7 @@ from app.data_access.file_finder import (
     find_raw_pod_files,
     latest_file,
 )
+from app.data_access.forecast_reader import read_latest_forecasts
 from app.data_access.sqlite_reader import (
     discover_pod_ids_from_sqlite,
     read_link_quality_sqlite,
@@ -22,6 +23,7 @@ __all__ = [
     "find_processed_pod_files",
     "find_raw_pod_files",
     "latest_file",
+    "read_latest_forecasts",
     "read_link_quality",
     "read_link_quality_sqlite",
     "read_processed_samples",

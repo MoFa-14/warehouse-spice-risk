@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import Sequence
 
 
 T_OPT_MIN = 10.0
@@ -44,6 +45,16 @@ class ClassificationResult:
     description: str
     recommendation: str
     reasons: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TrajectoryClassificationResult:
+    """Worst predicted classification found across a forecast trajectory."""
+
+    status: ClassificationResult
+    horizon_minute: int
+    temp_c: float
+    rh_pct: float
 
 
 LEVEL_DEFINITIONS = {
@@ -155,6 +166,26 @@ def classify_storage_conditions(temp_c: float | None, rh_pct: float | None) -> C
         recommendation=definition.recommendation,
         reasons=reasons,
     )
+
+
+def classify_storage_trajectory(
+    temp_forecast_c: Sequence[float | None],
+    rh_forecast_pct: Sequence[float | None],
+) -> TrajectoryClassificationResult | None:
+    """Return the highest-severity alert found across the forecast horizon."""
+    worst: TrajectoryClassificationResult | None = None
+    for minute_index, (temp_c, rh_pct) in enumerate(zip(temp_forecast_c, rh_forecast_pct), start=1):
+        status = classify_storage_conditions(temp_c, rh_pct)
+        if status is None:
+            continue
+        if worst is None or status.level > worst.status.level:
+            worst = TrajectoryClassificationResult(
+                status=status,
+                horizon_minute=minute_index,
+                temp_c=float(temp_c),
+                rh_pct=float(rh_pct),
+            )
+    return worst
 
 
 def threshold_legend() -> list[dict[str, str]]:

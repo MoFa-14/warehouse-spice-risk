@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
 
 
 class DashboardConfig:
@@ -20,5 +31,6 @@ class DashboardConfig:
     ACK_MINUTES = 30
     MAX_CHART_POINTS = 5000
     DEFAULT_RANGE = "24h"
-    AUTO_REFRESH_SECONDS = 5
+    AUTO_REFRESH_SECONDS = _env_int("DASHBOARD_AUTO_REFRESH_SECONDS", 0)
+    DISPLAY_TIMEZONE = "local"
     SECRET_KEY = "warehouse-spice-risk-dashboard"

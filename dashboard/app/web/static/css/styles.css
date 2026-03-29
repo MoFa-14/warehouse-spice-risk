@@ -179,7 +179,8 @@ button:hover {
 .summary-card,
 .table-shell,
 .empty-state,
-.placeholder-card {
+.placeholder-card,
+.prediction-reason {
     background: var(--surface);
     border: 1px solid rgba(217, 201, 170, 0.85);
     border-radius: 1.35rem;
@@ -190,7 +191,8 @@ button:hover {
 .legend-panel,
 .placeholder-card,
 .empty-state,
-.summary-card {
+.summary-card,
+.prediction-reason {
     padding: 1.25rem;
 }
 
@@ -262,6 +264,44 @@ button:hover {
 
 .card-actions {
     margin-top: 1rem;
+}
+
+.forecast-scenario-grid {
+    margin-bottom: 1rem;
+}
+
+.prediction-card,
+.prediction-summary-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.prediction-card::after,
+.prediction-summary-card::after {
+    content: "";
+    position: absolute;
+    inset: auto -2rem -2rem auto;
+    width: 8rem;
+    height: 8rem;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(154, 90, 24, 0.12), transparent 70%);
+}
+
+.prediction-summary-card-alt::after {
+    background: radial-gradient(circle, rgba(197, 48, 48, 0.12), transparent 70%);
+}
+
+.forecast-eval {
+    margin: 0.8rem 0;
+    padding: 0.8rem 0.9rem;
+    border-radius: 1rem;
+    background: rgba(255, 250, 240, 0.9);
+    border: 1px solid rgba(217, 201, 170, 0.65);
+}
+
+.forecast-eval strong {
+    display: block;
+    margin-bottom: 0.3rem;
 }
 
 .controls-panel {

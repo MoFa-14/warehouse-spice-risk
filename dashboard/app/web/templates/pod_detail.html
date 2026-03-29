@@ -58,11 +58,11 @@
     <form class="custom-range-form" method="get">
         <input type="hidden" name="range" value="custom">
         <label>
-            Start (UTC)
+            Start ({{ display_time_label }})
             <input type="datetime-local" name="start" value="{{ custom_start }}">
         </label>
         <label>
-            End (UTC)
+            End ({{ display_time_label }})
             <input type="datetime-local" name="end" value="{{ custom_end }}">
         </label>
         <button type="submit">Apply</button>
@@ -96,5 +96,12 @@
     <h3>No data for this period.</h3>
     <p>Try a wider range or verify that CSV files exist for the selected pod.</p>
 </section>
+{% endif %}
+
+{% if prediction and prediction.has_prediction %}
+{% if not charts.has_data and prediction.plotly_js %}
+<script>{{ prediction.plotly_js|safe }}</script>
+{% endif %}
+{% include "_prediction_panel.html" %}
 {% endif %}
 {% endblock %}

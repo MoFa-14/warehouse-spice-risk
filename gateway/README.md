@@ -415,6 +415,72 @@ If you intentionally want to trust the cached GATT layout, add `--use-cached-ser
 - If the pod reboots and its sequence counter restarts, the gateway clears its in-memory dedupe window and opens a new internal SQLite session so logging continues instead of colliding with old rows.
 - SQLite is now the primary live store. CSV is kept as a legacy backend and as an export/reporting format.
 
+## Forecasting CLI
+
+The repository now includes a lightweight forecasting loop for the next 30 minutes of temperature and RH per pod. It reads the last 3 hours of telemetry, checks for recent disturbances, produces a baseline forecast, and adds an `event_persist` scenario when a spike is still active.
+
+One-shot forecast for one pod:
+
+```powershell
+python -m gateway.cli.forecast_cli once --pod 01
+```
+
+Continuous 30-minute scheduler for one pod:
+
+```powershell
+python -m gateway.cli.forecast_cli run --pod 01 --every-minutes 30
+```
+
+Continuous 30-minute scheduler for every known pod:
+
+```powershell
+python -m gateway.cli.forecast_cli run --all --every-minutes 30
+```
+
+Useful options:
+
+- `--k 10`
+- `--history-minutes 180`
+- `--horizon-minutes 30`
+- `--missing-rate-max 0.1`
+- `--storage sqlite|csv`
+- `--db-path data/db/telemetry.sqlite`
+- `--verbose`
+
+The forecaster prefers SQLite input and automatically falls back to canonical raw CSV pod files if the SQLite live store is not available.
+
+### Forecast Storage
+
+SQLite mode writes forecasting artefacts into the same live database:
+
+- `forecasts`
+- `evaluations`
+- `case_base`
+
+CSV-only mode writes JSONL files here:
+
+- `data/ml/forecasts.jsonl`
+- `data/ml/evaluations.jsonl`
+- `data/ml/case_base.jsonl`
+
+### Log Interpretation
+
+Forecast cycle logs look like this:
+
+```text
+forecast pod=01 ts=2026-03-28T03:00:00Z event=True type=door_open_like source=analogue_knn neighbors=10 missing_rate=0.011
+evaluation pod=01 ts=2026-03-28T03:00:00Z scenario=baseline maeT=0.214 rmseT=0.288 maeRH=1.102 rmseRH=1.530
+```
+
+Interpretation:
+
+- `event` tells you whether the recent tail of the 3-hour window contained a disturbance
+- `type` is the heuristic label for that disturbance
+- `source` is `analogue_knn` when the case base is large enough, otherwise `fallback_persistence`
+- `neighbors` is the number of analogue cases actually aggregated
+- `missing_rate` is the fraction of the 3-hour resampled window that had to be gap-filled
+- the evaluation line reports 30-minute MAE and RMSE for temperature and RH after the horizon completes
+
 ## Troubleshooting Checklist
 
 If rows stop appearing or SQLite reports locking trouble:

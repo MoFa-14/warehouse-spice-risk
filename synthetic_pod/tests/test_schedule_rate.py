@@ -29,6 +29,21 @@ class ScheduleRateTests(unittest.TestCase):
         )
         self.assertLess(schedule.noise_multiplier(inactive_uptime), schedule.noise_multiplier(active_uptime))
 
+    def test_start_hour_offset_aligns_schedule_to_local_clock(self) -> None:
+        schedule = ActiveHoursSchedule(active_start_hour=8, active_end_hour=18)
+
+        self.assertTrue(schedule.is_active(0.0, start_hour_offset=9.0))
+        self.assertFalse(schedule.is_active(0.0, start_hour_offset=3.0))
+        self.assertEqual(
+            schedule.event_rate_per_hour(
+                base_rate_per_hour=0.2,
+                active_rate_per_hour=0.8,
+                uptime_s=0.0,
+                start_hour_offset=9.0,
+            ),
+            0.8,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

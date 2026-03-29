@@ -1,6 +1,7 @@
 param(
     [int]$Port = 5000,
-    [string]$Host = "127.0.0.1"
+    [string]$Host = "127.0.0.1",
+    [int]$AutoRefreshSeconds = 0
 )
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -13,6 +14,7 @@ if (-not (Test-Path $venvPython)) {
 
 Push-Location $dashboardRoot
 try {
+    $env:DASHBOARD_AUTO_REFRESH_SECONDS = "$AutoRefreshSeconds"
     & $venvPython -m flask --app app.main run --host $Host --port $Port --debug
 }
 finally {

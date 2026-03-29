@@ -1,0 +1,94 @@
+<section class="section-heading compact">
+    <div>
+        <p class="eyebrow">Latest Forecast</p>
+        <h3>Pod {{ prediction.pod_id }} 30-minute outlook</h3>
+    </div>
+    {% if prediction.event_detected %}
+    <span class="status-badge level-warning">Event: {{ prediction.event_type }}</span>
+    {% else %}
+    <span class="status-badge status-muted">No active event</span>
+    {% endif %}
+</section>
+
+<section class="summary-grid forecast-scenario-grid">
+    <article class="summary-card prediction-summary-card">
+        <div class="card-head">
+            <div>
+                <span>Scenario</span>
+                <strong>Baseline</strong>
+            </div>
+            {% if prediction.baseline.predicted_status %}
+            <span class="status-badge {{ prediction.baseline.predicted_status.status.css_class }}">{{ prediction.baseline.predicted_status.status.level_label }}</span>
+            {% endif %}
+        </div>
+        <p class="muted-copy">Forecast time: {{ prediction.ts_pc_utc|fmt_ts }}</p>
+        <p class="muted-copy">Source: {{ prediction.baseline.source }}</p>
+        <p class="muted-copy">Neighbours: {{ prediction.baseline.neighbor_count }}</p>
+        <p class="muted-copy">Temperature end: {{ prediction.baseline.temp_end_c|fmt_num }} C</p>
+        <p class="muted-copy">Humidity end: {{ prediction.baseline.rh_end_pct|fmt_num }}%</p>
+        <p class="muted-copy">Dew point end: {{ prediction.baseline.dew_end_c|fmt_num }} C</p>
+        {% if prediction.baseline.predicted_status %}
+        <p class="card-message">{{ prediction.baseline.predicted_status.status.description }}</p>
+        <p class="card-recommendation">{{ prediction.baseline.predicted_status.status.recommendation }}</p>
+        <p class="muted-copy">Highest predicted alert at +{{ prediction.baseline.predicted_status.horizon_minute }} min ({{ prediction.baseline.predicted_status.temp_c|fmt_num }} C / {{ prediction.baseline.predicted_status.rh_pct|fmt_num }}%).</p>
+        {% endif %}
+        {% if prediction.baseline.evaluation %}
+        <div class="forecast-eval">
+            <strong>Latest evaluation</strong>
+            <p>RMSE temp {{ prediction.baseline.evaluation.rmse_temp_c|fmt_num }} C</p>
+            <p>RMSE RH {{ prediction.baseline.evaluation.rmse_rh_pct|fmt_num }}%</p>
+        </div>
+        {% endif %}
+        <p class="muted-copy">{{ prediction.baseline.notes }}</p>
+    </article>
+
+    {% if prediction.event_persist %}
+    <article class="summary-card prediction-summary-card prediction-summary-card-alt">
+        <div class="card-head">
+            <div>
+                <span>Scenario</span>
+                <strong>Event persist</strong>
+            </div>
+            {% if prediction.event_persist.predicted_status %}
+            <span class="status-badge {{ prediction.event_persist.predicted_status.status.css_class }}">{{ prediction.event_persist.predicted_status.status.level_label }}</span>
+            {% endif %}
+        </div>
+        <p class="muted-copy">Source: {{ prediction.event_persist.source }}</p>
+        <p class="muted-copy">Temperature end: {{ prediction.event_persist.temp_end_c|fmt_num }} C</p>
+        <p class="muted-copy">Humidity end: {{ prediction.event_persist.rh_end_pct|fmt_num }}%</p>
+        <p class="muted-copy">Dew point end: {{ prediction.event_persist.dew_end_c|fmt_num }} C</p>
+        {% if prediction.event_persist.predicted_status %}
+        <p class="card-message">{{ prediction.event_persist.predicted_status.status.description }}</p>
+        <p class="card-recommendation">{{ prediction.event_persist.predicted_status.status.recommendation }}</p>
+        <p class="muted-copy">Highest predicted alert at +{{ prediction.event_persist.predicted_status.horizon_minute }} min ({{ prediction.event_persist.predicted_status.temp_c|fmt_num }} C / {{ prediction.event_persist.predicted_status.rh_pct|fmt_num }}%).</p>
+        {% endif %}
+        {% if prediction.event_persist.evaluation %}
+        <div class="forecast-eval">
+            <strong>Latest evaluation</strong>
+            <p>RMSE temp {{ prediction.event_persist.evaluation.rmse_temp_c|fmt_num }} C</p>
+            <p>RMSE RH {{ prediction.event_persist.evaluation.rmse_rh_pct|fmt_num }}%</p>
+        </div>
+        {% endif %}
+        <p class="muted-copy">{{ prediction.event_persist.notes }}</p>
+    </article>
+    {% endif %}
+</section>
+
+{% if prediction.event_detected and prediction.event_reason %}
+<section class="legend-panel prediction-reason">
+    <h4>Event reason</h4>
+    <p>{{ prediction.event_reason }}</p>
+    <small>Model version: {{ prediction.model_version }}</small>
+</section>
+{% endif %}
+
+{% if prediction.temp_chart or prediction.rh_chart %}
+<div class="chart-grid">
+    {% if prediction.temp_chart %}
+    <section class="chart-card">{{ prediction.temp_chart|safe }}</section>
+    {% endif %}
+    {% if prediction.rh_chart %}
+    <section class="chart-card">{{ prediction.rh_chart|safe }}</section>
+    {% endif %}
+</div>
+{% endif %}

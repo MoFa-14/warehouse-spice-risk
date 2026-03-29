@@ -1,0 +1,2 @@
+# No additional third-party dependencies are required.
+# The forecasting package intentionally uses only the Python standard library.

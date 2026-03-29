@@ -8,7 +8,9 @@ import contextlib
 import json
 import logging
 import random
+from datetime import datetime
 from typing import Sequence
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sim.buffer import ReplayBuffer
 from sim.faults import FaultAction, FaultController, FaultProfile
@@ -20,12 +22,50 @@ from sim.zone_profiles import get_zone_profile, zone_profile_names
 LOGGER = logging.getLogger("synthetic_pod")
 
 
+def _parse_start_local(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"Invalid --start-local value {value!r}. Expected an ISO timestamp such as 2026-07-15T09:00:00."
+        ) from exc
+
+
+def _validate_timezone(value: str) -> str:
+    value = str(value).strip()
+    if not value:
+        raise argparse.ArgumentTypeError("--timezone must not be empty.")
+    try:
+        ZoneInfo(value)
+    except ZoneInfoNotFoundError:
+        # Some Windows Python environments do not ship the IANA timezone database.
+        # We still accept the timezone name and fall back to a named local-clock mode.
+        if "/" not in value and value.upper() != "UTC":
+            raise argparse.ArgumentTypeError(
+                f"Unknown timezone {value!r}. Example valid value: Europe/London."
+            ) from None
+    return value
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Synthetic pod simulator for multi-pod gateway tests")
     parser.add_argument("--gateway-host", default="127.0.0.1")
     parser.add_argument("--gateway-port", type=int, default=8765)
     parser.add_argument("--pod-id", default="02")
     parser.add_argument("--interval", type=int, default=60)
+    parser.add_argument(
+        "--timezone",
+        type=_validate_timezone,
+        default="Europe/London",
+        help="IANA timezone used for Bristol-style day/night and seasonal alignment.",
+    )
+    parser.add_argument(
+        "--start-local",
+        type=_parse_start_local,
+        help="Optional ISO local timestamp that anchors the simulation clock, for example 2026-07-15T09:00:00.",
+    )
     parser.add_argument(
         "--zone-profile",
         choices=zone_profile_names(),
@@ -134,6 +174,8 @@ class SyntheticPodClient:
             event_spike_temp_c=args.event_spike_temp,
             event_spike_rh_pct=args.event_spike_rh,
             recovery_tau_seconds=args.recovery_tau_seconds,
+            timezone_name=args.timezone,
+            start_local_time=args.start_local,
             schedule=schedule,
         )
         self.buffer = ReplayBuffer(maxlen=args.replay_buffer_size)

@@ -20,11 +20,14 @@ Pod 02 now imitates those ideas with a small zone-based generator that produces 
 - Zone baselines:
   `base_temp_c` and `base_rh_pct` represent spatial variability. Different zones start from different nominal conditions instead of sharing one warehouse-wide average.
 
+- Bristol-inspired seasonal forcing:
+  A lightweight reference curve nudges the indoor target so summer settles warmer than winter and daytime settles warmer than night. This is a trend guide, not a replay of outdoor weather.
+
 - Stratified profile:
   `upper_rack_stratified` encodes a warmer and slightly drier baseline than the interior profile. This is a simplified representation of vertical stratification rather than a full physical airflow model.
 
 - Door-opening disturbances:
-  Disturbance events add temporary positive spikes to temperature and humidity, especially in the `entrance_disturbed` profile. This mirrors short-lived thermal disturbances near active warehouse boundaries.
+  Disturbance events move temperature and humidity toward the outdoor reference instead of always pushing upward. This gives more natural entrance behavior because a cool damp day can produce a slight cooling event, while a warm period can produce a mild warming event.
 
 - Exponential recovery:
   After a disturbance, the simulator decays back toward baseline using a configurable recovery constant. This approximates how local conditions settle after a door event or handling burst.
@@ -32,8 +35,11 @@ Pod 02 now imitates those ideas with a small zone-based generator that produces 
 - Active-hours schedule:
   Event rates are higher during active hours and lower outside them, representing the paper's practical idea that operational activity changes warehouse environmental stress over time.
 
+- Mean-reverting indoor drift:
+  Instead of an unrestricted random walk, the baseline now drifts toward an indoor target derived from season and hour-of-day. This keeps the slope flatter and more realistic while still allowing continuous movement.
+
 - Drift and short-term noise:
-  Slow bounded random walk plus short-term noise represent the continuous background variability captured by real sensor mapping, without pretending to be a full thermodynamic model.
+  Bounded stochastic drift plus short-term noise represent the continuous background variability captured by real sensor mapping, without pretending to be a full thermodynamic model.
 
 - Bursty communication faults:
   Optional burst loss/delay lets radio issues cluster during disturbances, which is useful for gateway stress testing when environmental activity and communication quality degrade together.
@@ -54,6 +60,7 @@ Pod 02 now imitates those ideas with a small zone-based generator that produces 
 - Temperature is clipped to `[-5, 45] C` and RH to `[0, 100]%` so the synthetic pod always stays within plausible operating bounds.
 - Event rates are defined per hour because disturbances are not expected every sample.
 - Recovery uses `exp(-dt / tau)` to make disturbance effects smooth and physically plausible enough for system testing.
+- The Bristol reference is attenuated indoors through seasonal and diurnal weights so warehouse readings stay smoother than outside conditions.
 - Drift is bounded separately from hard output clipping so the zone can wander realistically without becoming unstable.
 
 ## Intended Use

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import timezone
 from pathlib import Path
 
 from flask import Flask, abort, redirect, render_template, request, url_for
@@ -12,11 +11,19 @@ from app.services import (
     acknowledge_alert,
     build_alert_snapshot,
     build_health_context,
+    build_pod_prediction_context,
+    build_prediction_page_context,
     build_timeseries_context,
     get_latest_pod_reading,
     get_latest_pod_readings,
     resolve_time_window,
     threshold_legend,
+)
+from app.timezone import (
+    format_datetime_local_value,
+    format_display_timestamp,
+    resolve_display_timezone,
+    timezone_label,
 )
 
 
@@ -49,9 +56,7 @@ def _ensure_runtime_paths(app: Flask) -> None:
 def _register_filters(app: Flask) -> None:
     @app.template_filter("fmt_ts")
     def fmt_ts(value):
-        if value is None:
-            return "No data"
-        return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        return format_display_timestamp(value, _display_timezone(app))
 
     @app.template_filter("fmt_num")
     def fmt_num(value, digits: int = 2):
@@ -75,8 +80,10 @@ def _register_filters(app: Flask) -> None:
 def _register_context_processors(app: Flask) -> None:
     @app.context_processor
     def inject_dashboard_defaults():
+        display_timezone = _display_timezone(app)
         return {
             "auto_refresh_seconds": int(app.config.get("AUTO_REFRESH_SECONDS", 0) or 0),
+            "display_time_label": timezone_label(display_timezone),
         }
 
 
@@ -94,6 +101,7 @@ def _register_routes(app: Flask) -> None:
     @app.get("/pods/<pod_id>")
     def pod_detail(pod_id: str):
         readings, alert_snapshot = _base_context(app)
+        display_timezone = _display_timezone(app)
         reading = get_latest_pod_reading(
             Path(app.config["DATA_ROOT"]),
             pod_id,
@@ -105,6 +113,7 @@ def _register_routes(app: Flask) -> None:
             request.args.get("range"),
             request.args.get("start"),
             request.args.get("end"),
+            display_timezone=display_timezone,
         )
         charts = build_timeseries_context(
             Path(app.config["DATA_ROOT"]),
@@ -112,6 +121,13 @@ def _register_routes(app: Flask) -> None:
             window,
             max_points=int(app.config["MAX_CHART_POINTS"]),
             db_path=Path(app.config["DB_PATH"]),
+            display_timezone=display_timezone,
+        )
+        prediction = build_pod_prediction_context(
+            Path(app.config["DATA_ROOT"]),
+            pod_id,
+            db_path=Path(app.config["DB_PATH"]),
+            display_timezone=display_timezone,
         )
         preset_ranges = [("1h", "1h"), ("6h", "6h"), ("24h", "24h"), ("7d", "7d")]
         return render_template(
@@ -123,8 +139,9 @@ def _register_routes(app: Flask) -> None:
             charts=charts,
             threshold_legend=threshold_legend(),
             preset_ranges=preset_ranges,
-            custom_start=window.start.strftime("%Y-%m-%dT%H:%M"),
-            custom_end=window.end.strftime("%Y-%m-%dT%H:%M"),
+            custom_start=format_datetime_local_value(window.start, display_timezone),
+            custom_end=format_datetime_local_value(window.end, display_timezone),
+            prediction=prediction,
         )
 
     @app.get("/health")
@@ -166,11 +183,18 @@ def _register_routes(app: Flask) -> None:
     @app.get("/prediction")
     def prediction():
         readings, alert_snapshot = _base_context(app)
+        context = build_prediction_page_context(
+            Path(app.config["DATA_ROOT"]),
+            db_path=Path(app.config["DB_PATH"]),
+            selected_pod_id=request.args.get("pod"),
+            display_timezone=_display_timezone(app),
+        )
         return render_template(
             "prediction.html",
             page_title="Prediction",
             readings=readings,
             alert_banner=alert_snapshot["alert_banner"],
+            prediction=context,
         )
 
 
@@ -185,6 +209,10 @@ def _base_context(app: Flask):
         ack_minutes=int(app.config["ACK_MINUTES"]),
     )
     return readings, alert_snapshot
+
+
+def _display_timezone(app: Flask):
+    return resolve_display_timezone(app.config.get("DISPLAY_TIMEZONE"))
 
 
 app = create_app()

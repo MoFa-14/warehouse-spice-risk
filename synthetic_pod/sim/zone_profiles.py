@@ -25,6 +25,11 @@ class ZoneProfile:
     event_spike_temp_c: float
     event_spike_rh_pct: float
     recovery_tau_seconds: float
+    baseline_reversion_tau_seconds: float
+    seasonal_temp_weight: float
+    seasonal_rh_weight: float
+    diurnal_temp_weight: float
+    diurnal_rh_weight: float
 
 
 ZONE_PROFILES: dict[str, ZoneProfile] = {
@@ -35,40 +40,50 @@ ZONE_PROFILES: dict[str, ZoneProfile] = {
             "Interior aisle zone with low variance, modest drift, and infrequent disturbances. "
             "Represents a comparatively sheltered interior location."
         ),
-        base_temp_c=20.8,
-        base_rh_pct=38.0,
-        noise_temp_c=0.15,
-        noise_rh_pct=0.75,
-        drift_temp_step_c=0.012,
-        drift_rh_step_pct=0.05,
-        drift_temp_limit_c=0.8,
-        drift_rh_limit_pct=2.5,
+        base_temp_c=18.9,
+        base_rh_pct=46.0,
+        noise_temp_c=0.10,
+        noise_rh_pct=0.45,
+        drift_temp_step_c=0.008,
+        drift_rh_step_pct=0.03,
+        drift_temp_limit_c=0.6,
+        drift_rh_limit_pct=1.8,
         event_rate_per_hour=0.10,
-        event_rate_active_hours_per_hour=0.35,
-        event_spike_temp_c=0.7,
-        event_spike_rh_pct=2.5,
-        recovery_tau_seconds=1800.0,
+        event_rate_active_hours_per_hour=0.25,
+        event_spike_temp_c=0.45,
+        event_spike_rh_pct=1.6,
+        recovery_tau_seconds=2200.0,
+        baseline_reversion_tau_seconds=18000.0,
+        seasonal_temp_weight=0.28,
+        seasonal_rh_weight=0.20,
+        diurnal_temp_weight=0.18,
+        diurnal_rh_weight=0.12,
     ),
     "entrance_disturbed": ZoneProfile(
         name="entrance_disturbed",
         label="ZONE_B",
         description=(
-            "Entrance-facing zone with stronger fluctuations, higher humidity, and frequent door-opening "
-            "style disturbance spikes during active hours."
+            "Entrance-facing zone with modest operational movement, slightly elevated humidity, and "
+            "gentle door-opening style disturbances that still track indoor warehouse inertia."
         ),
-        base_temp_c=24.2,
-        base_rh_pct=49.0,
-        noise_temp_c=0.45,
-        noise_rh_pct=2.20,
-        drift_temp_step_c=0.030,
-        drift_rh_step_pct=0.12,
-        drift_temp_limit_c=1.5,
-        drift_rh_limit_pct=6.0,
-        event_rate_per_hour=0.35,
-        event_rate_active_hours_per_hour=1.40,
-        event_spike_temp_c=1.9,
-        event_spike_rh_pct=9.0,
-        recovery_tau_seconds=900.0,
+        base_temp_c=18.4,
+        base_rh_pct=52.0,
+        noise_temp_c=0.16,
+        noise_rh_pct=0.70,
+        drift_temp_step_c=0.010,
+        drift_rh_step_pct=0.04,
+        drift_temp_limit_c=0.75,
+        drift_rh_limit_pct=2.8,
+        event_rate_per_hour=0.12,
+        event_rate_active_hours_per_hour=0.35,
+        event_spike_temp_c=0.65,
+        event_spike_rh_pct=2.6,
+        recovery_tau_seconds=2000.0,
+        baseline_reversion_tau_seconds=14400.0,
+        seasonal_temp_weight=0.42,
+        seasonal_rh_weight=0.32,
+        diurnal_temp_weight=0.26,
+        diurnal_rh_weight=0.18,
     ),
     "upper_rack_stratified": ZoneProfile(
         name="upper_rack_stratified",
@@ -77,19 +92,24 @@ ZONE_PROFILES: dict[str, ZoneProfile] = {
             "Upper rack zone with a warmer, slightly drier baseline to emulate vertical stratification, "
             "plus moderate variance and disturbance sensitivity."
         ),
-        base_temp_c=23.6,
-        base_rh_pct=34.5,
-        noise_temp_c=0.28,
-        noise_rh_pct=1.20,
-        drift_temp_step_c=0.020,
-        drift_rh_step_pct=0.08,
-        drift_temp_limit_c=1.1,
-        drift_rh_limit_pct=4.0,
+        base_temp_c=20.1,
+        base_rh_pct=43.0,
+        noise_temp_c=0.14,
+        noise_rh_pct=0.55,
+        drift_temp_step_c=0.010,
+        drift_rh_step_pct=0.04,
+        drift_temp_limit_c=0.8,
+        drift_rh_limit_pct=2.4,
         event_rate_per_hour=0.18,
-        event_rate_active_hours_per_hour=0.60,
-        event_spike_temp_c=1.1,
-        event_spike_rh_pct=4.0,
-        recovery_tau_seconds=1400.0,
+        event_rate_active_hours_per_hour=0.45,
+        event_spike_temp_c=0.55,
+        event_spike_rh_pct=1.9,
+        recovery_tau_seconds=1800.0,
+        baseline_reversion_tau_seconds=15600.0,
+        seasonal_temp_weight=0.34,
+        seasonal_rh_weight=0.24,
+        diurnal_temp_weight=0.22,
+        diurnal_rh_weight=0.14,
     ),
 }
 
