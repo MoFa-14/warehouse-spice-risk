@@ -13,6 +13,12 @@ from plotly.offline import get_plotlyjs
 from app.data_access.csv_reader import read_processed_samples, read_raw_samples
 from app.data_access.file_finder import find_processed_pod_files, find_raw_pod_files
 from app.data_access.sqlite_reader import read_raw_samples_sqlite, sqlite_db_exists
+from app.services.telemetry_adjustments import (
+    apply_calibration,
+    apply_smoothing,
+    load_adjustments,
+    recompute_dew_point,
+)
 from app.timezone import parse_datetime_local_input, timezone_label, to_display_time
 
 
@@ -41,9 +47,10 @@ def resolve_time_window(
     end_text: str | None,
     *,
     display_timezone: tzinfo | None = None,
+    reference_end: datetime | None = None,
 ) -> TimeWindow:
     """Resolve preset or custom time range parameters."""
-    now = datetime.now(timezone.utc)
+    now = (reference_end or datetime.now(timezone.utc)).astimezone(timezone.utc)
     resolved_display_timezone = display_timezone or timezone.utc
     normalized = (range_key or "24h").lower()
 
@@ -67,6 +74,7 @@ def build_timeseries_context(
     max_points: int,
     db_path: Path | None = None,
     display_timezone: tzinfo | None = None,
+    adjustments_path: Path | None = None,
 ) -> dict[str, object]:
     """Load time-series data and render Plotly charts for a pod."""
     resolved_display_timezone = display_timezone or timezone.utc
@@ -80,6 +88,9 @@ def build_timeseries_context(
 
     raw_frame = _filter_window(raw_frame, window)
     processed_frame = _filter_window(processed_frame, window)
+    adjustments = load_adjustments(adjustments_path)
+    raw_frame = _adjust_raw_frame(raw_frame, adjustments)
+    processed_frame = _adjust_processed_frame(processed_frame, adjustments)
 
     if raw_frame.empty and processed_frame.empty:
         return {
@@ -164,6 +175,30 @@ def _filter_window(frame: pd.DataFrame, window: TimeWindow) -> pd.DataFrame:
     if frame.empty:
         return frame
     return frame[(frame["ts_pc_utc"] >= pd.Timestamp(window.start)) & (frame["ts_pc_utc"] <= pd.Timestamp(window.end))].copy()
+
+
+def _adjust_raw_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    adjusted = apply_calibration(frame, temp_column="temp_c", rh_column="rh_pct", adjustments=adjustments)
+    adjusted = apply_smoothing(
+        adjusted,
+        value_columns=("temp_c", "rh_pct"),
+        settings=adjustments.dashboard_smoothing,
+    )
+    return recompute_dew_point(adjusted, temp_column="temp_c", rh_column="rh_pct")
+
+
+def _adjust_processed_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    adjusted = apply_calibration(frame, temp_column="temp_c_clean", rh_column="rh_pct_clean", adjustments=adjustments)
+    adjusted = apply_smoothing(
+        adjusted,
+        value_columns=("temp_c_clean", "rh_pct_clean"),
+        settings=adjustments.dashboard_smoothing,
+    )
+    return recompute_dew_point(adjusted, temp_column="temp_c_clean", rh_column="rh_pct_clean")
 
 
 def _downsample(frame: pd.DataFrame, max_points: int) -> pd.DataFrame:

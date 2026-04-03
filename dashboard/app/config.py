@@ -16,6 +16,13 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_path(name: str, default: Path) -> Path:
+    value = os.getenv(name)
+    if value is None or not value.strip():
+        return default
+    return Path(value).expanduser()
+
+
 class DashboardConfig:
     """Default dashboard configuration values."""
 
@@ -33,4 +40,8 @@ class DashboardConfig:
     DEFAULT_RANGE = "24h"
     AUTO_REFRESH_SECONDS = _env_int("DASHBOARD_AUTO_REFRESH_SECONDS", 0)
     DISPLAY_TIMEZONE = "local"
+    TELEMETRY_ADJUSTMENTS_PATH = _env_path(
+        "DSP_TELEMETRY_ADJUSTMENTS_PATH",
+        DATA_ROOT / "config" / "telemetry_adjustments.json",
+    )
     SECRET_KEY = "warehouse-spice-risk-dashboard"

@@ -252,7 +252,7 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_core_routes_return_200(self) -> None:
-        for route in ("/", "/pods/01", "/health", "/alerts", "/prediction"):
+        for route in ("/", "/pods/01", "/health", "/alerts", "/prediction", "/review"):
             response = self.client.get(route)
             self.assertEqual(response.status_code, 200, route)
 
@@ -280,6 +280,10 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         self.assertIn(b"Immediate action required", prediction)
         self.assertIn(b"Monitor closely; improve ventilation/dehumidification if trend continues.", prediction)
         self.assertIn(b"30-minute outlook", detail)
+        review = self.client.get("/review").data
+        self.assertIn(b"review summary", review)
+        self.assertIn(b"Threshold excursions", review)
+        self.assertIn(b"Recommendation-triggering events", review)
 
     def test_dashboard_disables_auto_refresh_by_default(self) -> None:
         response = self.client.get("/")
@@ -314,6 +318,16 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
             follow_redirects=True,
         )
         self.assertEqual(response.status_code, 200)
+
+    def test_latest_api_route_returns_json(self) -> None:
+        response = self.client.get("/api/pods/01/latest")
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["pod_id"], "01")
+        self.assertEqual(payload["status"], "CRITICAL")
+        self.assertAlmostEqual(payload["temp_c"], 25.2)
+        self.assertAlmostEqual(payload["rh_pct"], 65.0)
+        self.assertEqual(payload["ts_pc_utc"], "2026-03-29T13:00:00Z")
 
     @staticmethod
     def _dew_point_c(temp_c: float, rh_pct: float) -> float:

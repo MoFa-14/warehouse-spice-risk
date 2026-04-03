@@ -48,6 +48,10 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     parser.add_argument("--missing-rate-max", type=float, default=0.10, help="Maximum acceptable missing-rate for case updates.")
     parser.add_argument("--storage", choices=("sqlite", "csv"), default="sqlite", help="Telemetry source backend.")
     parser.add_argument("--db-path", default="data/db/telemetry.sqlite", help="SQLite database path.")
+    parser.add_argument(
+        "--telemetry-adjustments",
+        help="Optional JSON file with per-pod calibration and forecast smoothing settings.",
+    )
     parser.add_argument("--verbose", action="store_true", help="Enable more detailed logging.")
     return parser
 
@@ -78,6 +82,7 @@ def cli(argv: Sequence[str] | None = None) -> int:
     runner = ForecastRunner(
         storage_backend=args.storage,
         db_path=args.db_path,
+        adjustments_path=args.telemetry_adjustments,
         k=args.k,
         history_minutes=args.history_minutes,
         horizon_minutes=args.horizon_minutes,

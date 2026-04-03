@@ -1,80 +1,139 @@
 # Warehouse Spice Risk
 
-## Phase 1 Status
+Warehouse Spice Risk is an IoT warehouse-monitoring prototype for spice-stock preservation. The implemented stack combines:
 
-Phase 1 in this workspace is the pod firmware for an Adafruit Feather nRF52840 Express with an SHT45 temperature / humidity sensor.
+- a physical BLE hardware pod based on an Adafruit Feather nRF52840 and SHT45 temperature/RH sensing
+- a synthetic TCP pod used for multi-zone testing and fault injection
+- a Python gateway that ingests both sources concurrently
+- SQLite as the primary live store
+- a 3-hour input / 30-minute horizon forecasting pipeline
+- a Flask dashboard for overview, pod detail, alerts, prediction, health, and review views
 
-This repo copy is organized so the firmware source in `firmware/circuitpython-pod/` is the single source of truth, and the board's `CIRCUITPY` drive is treated as a deployment target.
+This README is the main technical entry point for the GitHub repository.
 
-## What Is Included
+## Repository Layout
 
-- CircuitPython pod firmware in `firmware/circuitpython-pod/`
-- BLE protocol notes in `firmware/circuitpython-pod/protocol.md`
-- Phase 1 design notes in `docs/design-notes/pod-phase1.md`
-- Desktop BLE monitor in `pod_ble_monitor.py`
-- Desktop USB serial log monitor in `pod_serial_monitor.py`
-- Deploy / verify helpers for the board in `firmware/circuitpython-pod/deploy_to_circuitpy.ps1` and `firmware/circuitpython-pod/verify_deploy.ps1`
+Main code:
 
-## Source Of Truth Workflow
+- `firmware/circuitpython-pod/`
+- `gateway/src/gateway/`
+- `ml/src/forecasting/`
+- `dashboard/app/`
+- `synthetic_pod/`
+- `scripts/`
+- `evaluation/`
 
-1. Edit the firmware files under `firmware/circuitpython-pod/`.
-2. Deploy those exact files to `CIRCUITPY`.
-3. Verify the board copy matches the repo copy.
-4. Test over USB serial and BLE using the desktop helper scripts.
+Main data paths:
 
-This avoids a common demo problem where the desktop test script reflects new settings but the board is still running an older on-device file.
+- SQLite live database: `data/db/telemetry.sqlite`
+- Evaluation outputs: `evaluation/results/`
+
+## Current Architecture
+
+End-to-end runtime flow:
+
+1. The physical pod emits BLE telemetry with `pod_id`, `seq`, `ts_uptime_s`, `temp_c`, `rh_pct`, and `flags`.
+2. The synthetic pod emits TCP/JSON telemetry and supports replay/fault injection.
+3. The gateway validates samples, handles gaps/duplicates/resends, tracks link quality, and stores accepted telemetry in SQLite.
+4. The forecasting runner reads the most recent 3-hour window and produces 30-minute forecasts.
+5. The dashboard reads stored telemetry and forecast outputs from SQLite and renders the operator-facing views.
+
+Important implementation notes:
+
+- SQLite is the primary live source of truth.
+- The forecasting system is continuous-value forecasting, not classification.
+- The current implementation does **not** implement BLE mesh networking.
 
 ## Quick Start
 
-Create and use the local test environment:
+Create the local environment:
 
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\.venv\Scripts\python.exe -m pip install bleak pyserial
+.\.venv\Scripts\python.exe -m pip install -e .\gateway
+.\.venv\Scripts\python.exe -m pip install -r .\dashboard\requirements.txt
+.\.venv\Scripts\python.exe -m pip install -r .\synthetic_pod\requirements.txt
 ```
 
-Deploy to the board:
+Run the main pieces:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\firmware\circuitpython-pod\deploy_to_circuitpy.ps1 -DriveLetter E
-powershell -ExecutionPolicy Bypass -File .\firmware\circuitpython-pod\verify_deploy.ps1 -DriveLetter E
+.\scripts\run_gateway_multi.ps1
+.\scripts\run_pod2.ps1
+.\scripts\run_dashboard.ps1
 ```
 
-Watch USB serial logs:
+Useful helper tools:
 
 ```powershell
-.\.venv\Scripts\python.exe .\pod_serial_monitor.py --port COM6
+.\.venv\Scripts\python.exe .\scripts\pod_ble_monitor.py --list-only --scan-timeout 8
+.\.venv\Scripts\python.exe .\scripts\pod_serial_monitor.py --port COM6
 ```
 
-Scan for the pod over BLE:
+## Forecast Evaluation and Latency Results
+
+Methodology:
+
+- The SQLite database was analysed first to find the longest shared two-pod recording window.
+- The selected evaluation day was `2026-03-29`, which had `529` shared one-minute timestamps and `11.633` hours of overlap between pods `01` and `02`.
+- Forecast evaluation used the implemented `180`-minute history window, `30`-minute horizon, and a `10`-minute backtest cadence.
+- `Stable` windows are windows where the implemented event detector did not flag a recent disturbance.
+- `Disturbed` windows are windows where the event detector did flag a recent disturbance.
+- The baseline is persistence: the latest observed temperature and RH values are held constant for the full next `30` minutes.
+- The backtest was leakage-safe: the analogue case base started empty and only grew from earlier evaluated windows.
+- Latency was measured over `50` live synthetic TCP samples through the real gateway TCP ingester, SQLite write path, and dashboard JSON route.
+
+| Scenario | Windows Evaluated | Temp MAE | Temp RMSE | RH MAE | RH RMSE | Notes |
+|----------|-------------------|----------|-----------|--------|---------|-------|
+| Stable | 67 | 0.300 C | 0.391 C | 2.046 % | 3.062 % | 57 windows used `analogue_knn`; 10 used `fallback_persistence` |
+| Disturbed | 9 | 0.442 C | 0.503 C | 2.840 % | 3.446 % | All disturbed windows were flagged by the existing event detector |
+| Overall | 76 | 0.316 C | 0.405 C | 2.140 % | 3.110 % | Both pods included on the best shared day |
+
+| Scenario | Method | Temp MAE | Temp RMSE | RH MAE | RH RMSE | Better Than Persistence? |
+|----------|--------|----------|-----------|--------|---------|--------------------------|
+| Stable | Implemented forecast | 0.300 C | 0.391 C | 2.046 % | 3.062 % | No |
+| Stable | Persistence | 0.152 C | 0.235 C | 0.876 % | 1.541 % | Reference |
+| Disturbed | Implemented forecast | 0.442 C | 0.503 C | 2.840 % | 3.446 % | No |
+| Disturbed | Persistence | 0.196 C | 0.261 C | 0.945 % | 1.381 % | Reference |
+| Overall | Implemented forecast | 0.316 C | 0.405 C | 2.140 % | 3.110 % | No |
+| Overall | Persistence | 0.157 C | 0.238 C | 0.884 % | 1.523 % | Reference |
+
+| Metric | Value | Units | Sample Count | Notes |
+|--------|-------|-------|--------------|-------|
+| Median sample creation to gateway acceptance | 0.981 | ms | 50 | Measured from the synthetic TCP probe to gateway acceptance logging |
+| Median sample creation to database availability | 18.141 | ms | 50 | First time the sample row became visible in SQLite |
+| Median sample creation to dashboard/API visibility | 48.142 | ms | 50 | Measured via `/api/pods/<pod_id>/latest` |
+| Median gateway acceptance to database visibility | 18.010 | ms | 50 | Storage-stage breakdown only |
+| Worst observed end-to-end latency | 88.670 | ms | 50 | Maximum `t3 - t0` across the latency run |
+
+Interpretation:
+
+- Stable conditions were easier to forecast than disturbed conditions on the chosen shared-data day.
+- On this measured dataset, the implemented forecast did **not** outperform simple persistence overall or within either scenario group.
+- The latency results were still strong for a warehouse-monitoring prototype: median dashboard visibility stayed below `50 ms`, and the worst observed end-to-end latency stayed below `90 ms`.
+
+## Reproducibility
+
+Commands used:
 
 ```powershell
-.\.venv\Scripts\python.exe .\pod_ble_monitor.py --list-only --scan-timeout 8
+& 'C:\Users\TERA MAX\Desktop\DSP\src\.venv\Scripts\python.exe' -m unittest dashboard\tests\test_routes_smoke.py
+& 'C:\Users\TERA MAX\Desktop\DSP\src\.venv\Scripts\python.exe' '.\scripts\run_forecast_evaluation.py'
+& 'C:\Users\TERA MAX\Desktop\DSP\src\.venv\Scripts\python.exe' '.\scripts\run_latency_evaluation.py'
 ```
 
-Listen for telemetry notifications:
+Main scripts:
 
-```powershell
-.\.venv\Scripts\python.exe .\pod_ble_monitor.py --duration 70 --uncached
-```
+- `scripts/run_forecast_evaluation.py`
+- `scripts/run_latency_evaluation.py`
 
-## Current BLE Contract
+Main outputs:
 
-- Device name: `SHT45-POD-01`
-- Service UUID: `7f12b100-7c2d-4b6a-8f4b-8a1f0e3c0001`
-- Telemetry UUID: `7f12b100-7c2d-4b6a-8f4b-8a1f0e3c0002`
-- Control UUID: `7f12b100-7c2d-4b6a-8f4b-8a1f0e3c0003`
-- Status UUID: `7f12b100-7c2d-4b6a-8f4b-8a1f0e3c0004`
-
-Telemetry payload example:
-
-```json
-{"pod_id":"01","seq":123,"ts_uptime_s":4567.1,"temp_c":21.34,"rh_pct":54.12,"flags":0}
-```
-
-## Windows Notes
-
-- PowerShell may block `Activate.ps1`; using `.\.venv\Scripts\python.exe ...` works without changing the execution policy.
-- Windows can cache older BLE GATT layouts for the same device address. If a service or characteristic appears stale, try `--uncached`, close other BLE apps, or remove the device from Windows Bluetooth settings and reconnect.
-- `verify_deploy.ps1` is the quickest way to confirm whether the board is actually running the repo version of each firmware file.
+- `evaluation/results/forecast_metrics.csv`
+- `evaluation/results/forecast_metrics.json`
+- `evaluation/results/baseline_comparison.csv`
+- `evaluation/results/baseline_comparison.json`
+- `evaluation/results/latency_records.csv`
+- `evaluation/results/latency_summary.json`
+- `evaluation/README_EVALUATION_NOTES.md`

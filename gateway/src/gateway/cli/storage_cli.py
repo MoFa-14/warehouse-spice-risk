@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import json
 from datetime import date
 from pathlib import Path
 from typing import Sequence
 
+from gateway.link.diagnostics import build_diagnostics_summary
 from gateway.preprocess.export import export_training_dataset, preprocess_date_range
 from gateway.storage.export_csv import export_all_pods_csv, export_pod_csv
 from gateway.storage.import_csv import import_csv_history
@@ -97,6 +99,27 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Ignore gateway/logs compatibility CSV files and only import canonical data/raw CSVs.",
     )
 
+    diagnostics_parser = subparsers.add_parser(
+        "diagnostics",
+        help="Summarize per-pod link, resend, and timing diagnostics from SQLite.",
+    )
+    diagnostics_parser.add_argument(
+        "--db-path",
+        default="data/db/telemetry.sqlite",
+        help="SQLite database path. Defaults to data/db/telemetry.sqlite.",
+    )
+    diagnostics_parser.add_argument(
+        "--pod",
+        action="append",
+        help="Optional pod id to summarize. Repeat for multiple pods. Defaults to all pods in range.",
+    )
+    diagnostics_parser.add_argument(
+        "--hours",
+        type=float,
+        default=24.0,
+        help="How many recent hours to summarize. Defaults to 24.",
+    )
+
     args = parser.parse_args(argv)
 
     if args.command == "preprocess":
@@ -117,6 +140,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             parser.error("export-csv does not allow --out together with --all.")
         if args.pod and args.out_dir:
             parser.error("export-csv does not allow --out-dir together with --pod.")
+    elif args.command == "diagnostics":
+        if args.hours <= 0:
+            parser.error("--hours must be greater than 0.")
 
     return args
 
@@ -208,6 +234,19 @@ def cli(argv: Sequence[str] | None = None) -> int:
                 source=row.get("source") or "-",
             )
         )
+        return 0
+
+    if args.command == "diagnostics":
+        db_path = resolve_db_path(args.db_path)
+        if not db_path.exists():
+            print(f"Database not found: {db_path}")
+            return 1
+        summary = build_diagnostics_summary(
+            db_path=db_path,
+            hours=args.hours,
+            pod_ids=args.pod,
+        )
+        print(json.dumps(summary, indent=2))
         return 0
 
     date_from = date.fromisoformat(args.date_from)

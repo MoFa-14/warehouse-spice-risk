@@ -1,0 +1,106 @@
+{
+  "selected_day": {
+    "day": "2026-03-29",
+    "shared_minutes": 529,
+    "shared_start_utc": "2026-03-29T12:21:00Z",
+    "shared_end_utc": "2026-03-29T23:59:00Z",
+    "shared_span_hours": 11.633333333333333,
+    "pod_sample_counts": {
+      "02": 571,
+      "01": 531
+    }
+  },
+  "history_minutes": 180,
+  "horizon_minutes": 30,
+  "step_minutes": 10,
+  "comparison": {
+    "stable": {
+      "implemented": {
+        "windows": 67,
+        "points": 2010,
+        "temp_mae": 0.29960487096537,
+        "temp_rmse": 0.3905049590272845,
+        "rh_mae": 2.0456762693682387,
+        "rh_rmse": 3.0623725420491064,
+        "dew_mae": 0.48572583841208294,
+        "dew_rmse": 0.6587593823008441
+      },
+      "persistence": {
+        "windows": 67,
+        "points": 2010,
+        "temp_mae": 0.1516771144278605,
+        "temp_rmse": 0.2347768634722987,
+        "rh_mae": 0.8763099502487562,
+        "rh_rmse": 1.5411871287003542,
+        "dew_mae": 0.24327875859038017,
+        "dew_rmse": 0.34485502290818326
+      },
+      "better_than_persistence": "No",
+      "percent_improvement": {
+        "temp_mae": -97.52806617893943,
+        "temp_rmse": -66.33025641956417,
+        "rh_mae": -133.44209075653393,
+        "rh_rmse": -98.70218775000612
+      }
+    },
+    "disturbed": {
+      "implemented": {
+        "windows": 9,
+        "points": 270,
+        "temp_mae": 0.4416185185185181,
+        "temp_rmse": 0.5031675904448474,
+        "rh_mae": 2.8401351851851846,
+        "rh_rmse": 3.4457364252126177,
+        "dew_mae": 0.5271330866729279,
+        "dew_rmse": 0.6459996370397949
+      },
+      "persistence": {
+        "windows": 9,
+        "points": 270,
+        "temp_mae": 0.1964296296296298,
+        "temp_rmse": 0.2610095499884731,
+        "rh_mae": 0.945074074074074,
+        "rh_rmse": 1.3811040216140555,
+        "dew_mae": 0.293584315129005,
+        "dew_rmse": 0.440390575015918
+      },
+      "better_than_persistence": "No",
+      "percent_improvement": {
+        "temp_mae": -124.82276189757859,
+        "temp_rmse": -92.77746368555046,
+        "rh_mae": -200.51984951208993,
+        "rh_rmse": -149.49144823904626
+      }
+    },
+    "overall": {
+      "implemented": {
+        "windows": 76,
+        "points": 2280,
+        "temp_mae": 0.3164222765966639,
+        "temp_rmse": 0.4054838704582179,
+        "rh_mae": 2.1397569304518242,
+        "rh_rmse": 3.1102384192969614,
+        "dew_mae": 0.49062932833770934,
+        "dew_rmse": 0.6572612901879986
+      },
+      "persistence": {
+        "windows": 76,
+        "points": 2280,
+        "temp_mae": 0.15697675438596476,
+        "temp_rmse": 0.23803431954384563,
+        "rh_mae": 0.8844530701754384,
+        "rh_rmse": 1.523108426379676,
+        "dew_mae": 0.24923599554890144,
+        "dew_rmse": 0.3575035672317591
+      },
+      "better_than_persistence": "No",
+      "percent_improvement": {
+        "temp_mae": -101.57269643801166,
+        "temp_rmse": -70.34681017227359,
+        "rh_mae": -141.92995678418373,
+        "rh_rmse": -104.20334924479306
+      }
+    }
+  },
+  "window_records_path": "C:\\Users\\TERA MAX\\Desktop\\DSP\\evaluation\\results\\baseline_comparison.csv"
+}

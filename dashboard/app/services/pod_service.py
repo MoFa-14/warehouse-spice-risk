@@ -11,6 +11,7 @@ import pandas as pd
 from app.data_access.csv_reader import read_processed_samples, read_raw_samples
 from app.data_access.file_finder import discover_pod_ids, find_processed_pod_files, find_raw_pod_files
 from app.data_access.sqlite_reader import read_raw_samples_sqlite, sqlite_db_exists
+from app.services.telemetry_adjustments import apply_calibration, load_adjustments
 from app.services.thresholds import ClassificationResult, classify_storage_conditions
 
 
@@ -48,22 +49,38 @@ def discover_dashboard_pods(data_root: Path, *, db_path: Path | None = None) -> 
     return discover_pod_ids(Path(data_root), db_path=db_path)
 
 
-def get_latest_pod_readings(data_root: Path, *, db_path: Path | None = None) -> list[PodLatestReading]:
+def get_latest_pod_readings(
+    data_root: Path,
+    *,
+    db_path: Path | None = None,
+    adjustments_path: Path | None = None,
+) -> list[PodLatestReading]:
     """Return latest readings for every discovered pod."""
     readings: list[PodLatestReading] = []
+    adjustments = load_adjustments(adjustments_path)
     for pod_id in discover_dashboard_pods(data_root, db_path=db_path):
-        reading = get_latest_pod_reading(data_root, pod_id, db_path=db_path)
+        reading = get_latest_pod_reading(data_root, pod_id, db_path=db_path, adjustments=adjustments)
         if reading is not None:
             readings.append(reading)
     readings.sort(key=lambda item: item.pod_id)
     return readings
 
 
-def get_latest_pod_reading(data_root: Path, pod_id: str, *, db_path: Path | None = None) -> PodLatestReading | None:
+def get_latest_pod_reading(
+    data_root: Path,
+    pod_id: str,
+    *,
+    db_path: Path | None = None,
+    adjustments_path: Path | None = None,
+    adjustments=None,
+) -> PodLatestReading | None:
     """Return the preferred latest reading for a single pod."""
     raw_frame = _load_raw_frame(Path(data_root), pod_id, db_path=db_path)
     processed_files = find_processed_pod_files(Path(data_root), pod_id)
     processed_frame = read_processed_samples(processed_files[-3:]) if processed_files else pd.DataFrame()
+    resolved_adjustments = adjustments or load_adjustments(adjustments_path)
+    raw_frame = _adjust_raw_frame(raw_frame, resolved_adjustments)
+    processed_frame = _adjust_processed_frame(processed_frame, resolved_adjustments)
 
     current_candidates = [
         candidate
@@ -147,6 +164,18 @@ def _load_raw_frame(data_root: Path, pod_id: str, *, db_path: Path | None = None
         return read_raw_samples_sqlite(db_path, pod_id=pod_id)
     raw_files = find_raw_pod_files(Path(data_root), pod_id)
     return read_raw_samples(raw_files[-3:]) if raw_files else pd.DataFrame()
+
+
+def _adjust_raw_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    return apply_calibration(frame, temp_column="temp_c", rh_column="rh_pct", adjustments=adjustments)
+
+
+def _adjust_processed_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    return apply_calibration(frame, temp_column="temp_c_clean", rh_column="rh_pct_clean", adjustments=adjustments)
 
 
 def _candidate_from_raw_row(row) -> _ReadingCandidate | None:

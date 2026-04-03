@@ -47,6 +47,25 @@ class _RecordingResendController:
         self.from_seq_requests.append((pod_id, from_seq))
 
 
+class _RecordingSqliteLikeWriter:
+    def __init__(self) -> None:
+        self.records: list[tuple[int, tuple[str, ...]]] = []
+        self.events: list[tuple[str, str, str]] = []
+
+    def write_record(self, record: TelemetryRecord, *, quality_flags) -> object:
+        self.records.append((record.seq, tuple(quality_flags)))
+        return type("Result", (), {"inserted": True, "duplicate": False})()
+
+    def write_link_snapshot(self, _snapshot) -> None:
+        return None
+
+    def log_event(self, *, ts_pc_utc: str, level: str, pod_id: str | None = None, message: str) -> None:
+        self.events.append((level, str(pod_id or ""), message))
+
+    def close(self) -> None:
+        return None
+
+
 class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
     async def test_router_writes_per_pod_files_and_requests_resend_on_gap(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -238,6 +257,56 @@ class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(PodRouter._should_reset_sequence(stats, record))
+
+    async def test_router_flags_time_sync_anomaly_and_logs_gateway_events(self) -> None:
+        queue: asyncio.Queue[TelemetryRecord] = asyncio.Queue()
+        router = PodRouter(
+            queue=queue,
+            firmware=load_firmware_config(default_firmware_config_path()),
+            validation=ValidationSettings(temp_min_c=-20.0, temp_max_c=80.0),
+            data_root=Path("."),
+        )
+        router.writer.close()
+        router.writer = _RecordingSqliteLikeWriter()
+        controller = _RecordingResendController()
+        router.register_resend_controller("01", controller)
+        router.start()
+
+        await queue.put(
+            TelemetryRecord(
+                pod_id="01",
+                seq=1,
+                ts_uptime_s=10.0,
+                temp_c=20.0,
+                rh_pct=45.0,
+                flags=0,
+                rssi=-50,
+                source="BLE",
+                ts_pc_utc="2026-03-28T12:00:00Z",
+            )
+        )
+        await queue.put(
+            TelemetryRecord(
+                pod_id="01",
+                seq=3,
+                ts_uptime_s=70.0,
+                temp_c=20.5,
+                rh_pct=45.5,
+                flags=0,
+                rssi=-49,
+                source="BLE",
+                ts_pc_utc="2026-03-28T12:05:00Z",
+            )
+        )
+
+        await queue.join()
+        writer = router.writer
+        await router.stop()
+
+        self.assertEqual(controller.from_seq_requests, [("01", 2)])
+        self.assertIn("time_sync_anomaly", writer.records[-1][1])
+        self.assertTrue(any(message.startswith("resend_request") for _, _, message in writer.events))
+        self.assertTrue(any(message.startswith("time_sync_anomaly") for _, _, message in writer.events))
 
 
 if __name__ == "__main__":

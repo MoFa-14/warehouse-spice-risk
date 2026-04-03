@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import os
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
 from gateway.control.resend import TcpResendController
 from gateway.multi.record import TelemetryRecord
@@ -43,6 +47,8 @@ class TcpIngester:
         self._stop_event = asyncio.Event()
         self._connect_counts: dict[str, int] = {}
         self._client_tasks: set[asyncio.Task[None]] = set()
+        timing_path = str(os.getenv("DSP_EVAL_TIMING_LOG", "")).strip()
+        self._timing_log_path = Path(timing_path).expanduser() if timing_path else None
 
     async def start(self) -> None:
         self._server = await asyncio.start_server(self._accept_client, host=self.settings.host, port=self.settings.port)
@@ -118,6 +124,7 @@ class TcpIngester:
                         ts_pc_utc=utc_now_iso(),
                     )
                 )
+                self._append_timing_event(pod_id=decoded.pod_id, seq=decoded.seq)
         finally:
             if known_pod_id is not None:
                 self.router.note_disconnected(known_pod_id, "TCP")
@@ -131,3 +138,18 @@ class TcpIngester:
         self._connect_counts[pod_id] = count
         if count > 1:
             self.router.note_reconnect(pod_id, "TCP")
+
+    def _append_timing_event(self, *, pod_id: str, seq: int) -> None:
+        if self._timing_log_path is None:
+            return
+        payload = {
+            "event": "gateway_accepted",
+            "pod_id": str(pod_id),
+            "seq": int(seq),
+            "source": "TCP",
+            "ts_gateway_accepted_utc": datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z"),
+        }
+        self._timing_log_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._timing_log_path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(payload, separators=(",", ":"), sort_keys=True))
+            handle.write("\n")

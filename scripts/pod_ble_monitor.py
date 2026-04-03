@@ -6,7 +6,8 @@ from pathlib import Path
 
 from bleak import BleakClient, BleakScanner
 
-FIRMWARE_DIR = Path(__file__).resolve().parent / "firmware" / "circuitpython-pod"
+SRC_ROOT = Path(__file__).resolve().parents[1]
+FIRMWARE_DIR = SRC_ROOT / "firmware" / "circuitpython-pod"
 CONFIG_PATH = FIRMWARE_DIR / "config.py"
 POD_ADDRESS = "F2:9A:41:2B:5B:55"
 

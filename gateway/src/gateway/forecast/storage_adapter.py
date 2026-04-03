@@ -8,9 +8,15 @@ import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from gateway.forecast import _ensure_forecasting_package
+from gateway.forecast.telemetry_adjustments import (
+    apply_calibration_to_rows,
+    apply_smoothing_to_points,
+    load_adjustments,
+)
 from gateway.storage.paths import StoragePaths, build_storage_paths
 from gateway.storage.sqlite_db import connect_sqlite, resolve_db_path
 from gateway.storage.sqlite_reader import samples_in_range
@@ -42,10 +48,16 @@ class ForecastStorageAdapter:
         storage_backend: str,
         db_path=None,
         data_root=None,
+        adjustments_path=None,
     ) -> None:
         self.requested_backend = storage_backend.strip().lower()
         self.storage_paths = build_storage_paths(data_root)
         self.db_path = resolve_db_path(db_path)
+        self.adjustments = load_adjustments(
+            Path(adjustments_path)
+            if adjustments_path is not None
+            else self.storage_paths.root / "config" / "telemetry_adjustments.json"
+        )
         self.storage_backend = self._resolve_backend()
 
     def list_pod_ids(self) -> list[str]:
@@ -77,7 +89,7 @@ class ForecastStorageAdapter:
             ts_from_utc=start - timedelta(minutes=5),
             ts_to_utc=end + timedelta(minutes=1),
         )
-        return _resample_rows(rows=rows, timestamps=timestamps)
+        return self._smooth_window(_resample_rows(rows=rows, timestamps=timestamps))
 
     def load_actual_horizon(self, *, pod_id: str, ts_forecast_utc: datetime, minutes: int) -> WindowResult:
         start = floor_to_minute(ts_forecast_utc) + timedelta(minutes=1)
@@ -87,7 +99,7 @@ class ForecastStorageAdapter:
             ts_from_utc=start - timedelta(minutes=1),
             ts_to_utc=timestamps[-1] + timedelta(minutes=1),
         )
-        return _resample_rows(rows=rows, timestamps=timestamps)
+        return self._smooth_window(_resample_rows(rows=rows, timestamps=timestamps))
 
     def _resolve_backend(self) -> str:
         if self.requested_backend == "csv":
@@ -151,7 +163,7 @@ class ForecastStorageAdapter:
                 ts_from_utc=_iso(ts_from_utc),
                 ts_to_utc=_iso(ts_to_utc),
             )
-            return [
+            calibrated_rows = [
                 {
                     "ts_pc_utc": row["ts_pc_utc"],
                     "temp_c": row.get("temp_c"),
@@ -162,12 +174,23 @@ class ForecastStorageAdapter:
                 }
                 for row in rows
             ]
+            return apply_calibration_to_rows(calibrated_rows, pod_id=str(pod_id), adjustments=self.adjustments)
 
-        return _read_csv_rows(
-            storage_paths=self.storage_paths,
+        return apply_calibration_to_rows(
+            _read_csv_rows(
+                storage_paths=self.storage_paths,
+                pod_id=str(pod_id),
+                ts_from_utc=ts_from_utc,
+                ts_to_utc=ts_to_utc,
+            ),
             pod_id=str(pod_id),
-            ts_from_utc=ts_from_utc,
-            ts_to_utc=ts_to_utc,
+            adjustments=self.adjustments,
+        )
+
+    def _smooth_window(self, result: WindowResult) -> WindowResult:
+        return WindowResult(
+            points=apply_smoothing_to_points(result.points, self.adjustments.forecast_smoothing),
+            missing_rate=result.missing_rate,
         )
 
 

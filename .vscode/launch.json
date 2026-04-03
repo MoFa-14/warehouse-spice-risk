@@ -5,7 +5,7 @@
       "name": "Pod BLE Monitor",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}\\pod_ble_monitor.py",
+      "program": "${workspaceFolder}\\scripts\\pod_ble_monitor.py",
       "console": "integratedTerminal",
       "justMyCode": true,
       "args": ["--duration", "30"]
@@ -14,7 +14,7 @@
       "name": "Pod BLE Scan Only",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}\\pod_ble_monitor.py",
+      "program": "${workspaceFolder}\\scripts\\pod_ble_monitor.py",
       "console": "integratedTerminal",
       "justMyCode": true,
       "args": ["--list-only", "--scan-timeout", "8"]
@@ -23,7 +23,7 @@
       "name": "Pod BLE Dump Services",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}\\pod_ble_monitor.py",
+      "program": "${workspaceFolder}\\scripts\\pod_ble_monitor.py",
       "console": "integratedTerminal",
       "justMyCode": true,
       "args": ["--dump-services", "--scan-timeout", "8"]
@@ -32,7 +32,7 @@
       "name": "Pod Serial Monitor",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}\\pod_serial_monitor.py",
+      "program": "${workspaceFolder}\\scripts\\pod_serial_monitor.py",
       "console": "integratedTerminal",
       "justMyCode": true,
       "args": ["--port", "COM6"]

@@ -67,6 +67,7 @@ class QualityFlag(IntFlag):
     SEQ_GAP = 1 << 7
     JSON_ERROR_FIXED = 1 << 8
     DUPLICATE = 1 << 9
+    TIME_SYNC_ANOMALY = 1 << 10
 
 
 _QUALITY_FLAG_MAP = {
@@ -80,6 +81,7 @@ _QUALITY_FLAG_MAP = {
     "seq_gap": QualityFlag.SEQ_GAP,
     "json_error_fixed": QualityFlag.JSON_ERROR_FIXED,
     "duplicate": QualityFlag.DUPLICATE,
+    "time_sync_anomaly": QualityFlag.TIME_SYNC_ANOMALY,
 }
 _QUALITY_FLAG_NAMES_BY_VALUE = {
     int(member): name for name, member in _QUALITY_FLAG_MAP.items()

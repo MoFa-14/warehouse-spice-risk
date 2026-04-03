@@ -33,6 +33,7 @@ data/processed/**
 !data/processed/.gitkeep
 data/exports/**
 !data/exports/.gitkeep
+data/ml/**
 data/db/*.sqlite
 data/db/*.sqlite-*
 data/db/*.sqlite.lock
@@ -44,3 +45,6 @@ data/online/**
 dashboard/app/runtime/*.json
 !dashboard/app/runtime/.gitkeep
 dashboard/app/runtime/*.log
+
+evaluation/results/dashboard_runtime/
+evaluation/results/*.sqlite

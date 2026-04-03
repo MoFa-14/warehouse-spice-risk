@@ -40,6 +40,7 @@ class ForecastRunner:
         storage_backend: str,
         db_path=None,
         data_root=None,
+        adjustments_path=None,
         k: int | None = None,
         history_minutes: int = 180,
         horizon_minutes: int = 30,
@@ -51,7 +52,12 @@ class ForecastRunner:
             history_minutes=history_minutes,
             horizon_minutes=horizon_minutes,
         )
-        self.adapter = ForecastStorageAdapter(storage_backend=storage_backend, db_path=db_path, data_root=data_root)
+        self.adapter = ForecastStorageAdapter(
+            storage_backend=storage_backend,
+            db_path=db_path,
+            data_root=data_root,
+            adjustments_path=adjustments_path,
+        )
         self.outputs = ForecastOutputs(storage_backend=self.adapter.storage_backend, db_path=db_path, data_root=data_root)
         ml_root = build_storage_paths(data_root).root / "ml"
         self.case_base = CaseBaseStore(

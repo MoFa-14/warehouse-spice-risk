@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from flask import Flask, abort, redirect, render_template, request, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, url_for
 
 from app.config import DashboardConfig
 from app.services import (
     acknowledge_alert,
     build_alert_snapshot,
     build_health_context,
+    build_monitoring_review_context,
     build_pod_prediction_context,
     build_prediction_page_context,
     build_timeseries_context,
@@ -106,6 +107,7 @@ def _register_routes(app: Flask) -> None:
             Path(app.config["DATA_ROOT"]),
             pod_id,
             db_path=Path(app.config["DB_PATH"]),
+            adjustments_path=Path(app.config["TELEMETRY_ADJUSTMENTS_PATH"]),
         )
         if reading is None:
             abort(404)
@@ -114,6 +116,7 @@ def _register_routes(app: Flask) -> None:
             request.args.get("start"),
             request.args.get("end"),
             display_timezone=display_timezone,
+            reference_end=reading.ts_pc_utc,
         )
         charts = build_timeseries_context(
             Path(app.config["DATA_ROOT"]),
@@ -122,6 +125,7 @@ def _register_routes(app: Flask) -> None:
             max_points=int(app.config["MAX_CHART_POINTS"]),
             db_path=Path(app.config["DB_PATH"]),
             display_timezone=display_timezone,
+            adjustments_path=Path(app.config["TELEMETRY_ADJUSTMENTS_PATH"]),
         )
         prediction = build_pod_prediction_context(
             Path(app.config["DATA_ROOT"]),
@@ -197,11 +201,63 @@ def _register_routes(app: Flask) -> None:
             prediction=context,
         )
 
+    @app.get("/review")
+    def review():
+        readings, alert_snapshot = _base_context(app)
+        display_timezone = _display_timezone(app)
+        window = resolve_time_window(
+            request.args.get("range") or "7d",
+            request.args.get("start"),
+            request.args.get("end"),
+            display_timezone=display_timezone,
+        )
+        context = build_monitoring_review_context(
+            Path(app.config["DATA_ROOT"]),
+            window=window,
+            db_path=Path(app.config["DB_PATH"]),
+            pod_id=request.args.get("pod"),
+            acks_file=Path(app.config["ACKS_FILE"]),
+        )
+        return render_template(
+            "review.html",
+            page_title="Review",
+            readings=readings,
+            alert_banner=alert_snapshot["alert_banner"],
+            review=context,
+        )
+
+    @app.get("/api/pods/<pod_id>/latest")
+    def api_latest_pod_reading(pod_id: str):
+        reading = get_latest_pod_reading(
+            Path(app.config["DATA_ROOT"]),
+            pod_id,
+            db_path=Path(app.config["DB_PATH"]),
+            adjustments_path=Path(app.config["TELEMETRY_ADJUSTMENTS_PATH"]),
+        )
+        if reading is None:
+            return jsonify({"error": "pod_not_found", "pod_id": pod_id}), 404
+        return jsonify(
+            {
+                "pod_id": reading.pod_id,
+                "ts_pc_utc": reading.ts_pc_utc.isoformat().replace("+00:00", "Z"),
+                "temp_c": reading.temp_c,
+                "rh_pct": reading.rh_pct,
+                "dew_point_c": reading.dew_point_c,
+                "data_source": reading.data_source,
+                "has_measurement": reading.has_measurement,
+                "last_complete_ts_pc_utc": None
+                if reading.last_complete_ts_pc_utc is None
+                else reading.last_complete_ts_pc_utc.isoformat().replace("+00:00", "Z"),
+                "status": None if reading.status is None else reading.status.level_label,
+            }
+        )
+
 
 def _base_context(app: Flask):
     readings = get_latest_pod_readings(
         Path(app.config["DATA_ROOT"]),
         db_path=Path(app.config["DB_PATH"]),
+        adjustments_path=Path(app.config["TELEMETRY_ADJUSTMENTS_PATH"]),
     )
     alert_snapshot = build_alert_snapshot(
         readings,

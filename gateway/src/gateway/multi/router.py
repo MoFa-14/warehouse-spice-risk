@@ -12,6 +12,7 @@ from gateway.config import ValidationSettings
 from gateway.control.resend import ResendController
 from gateway.firmware_config_loader import FirmwareConfig
 from gateway.link.stats import LinkSnapshot
+from gateway.link.time_alignment import AlignmentState, DEFAULT_DRIFT_THRESHOLD_S, align_sample, reset_alignment
 from gateway.multi.record import TelemetryRecord
 from gateway.protocol.decoder import TelemetryRecord as ProtocolTelemetryRecord
 from gateway.protocol.validation import validate_telemetry
@@ -19,7 +20,7 @@ from gateway.storage.per_pod_csv_writer import PerPodCsvWriter
 from gateway.storage.sqlite_reader import latest_sample
 from gateway.storage.sqlite_writer import SqliteStorageWriter
 from gateway.utils.sequence import sequence_reset_detected
-from gateway.utils.timeutils import utc_now
+from gateway.utils.timeutils import utc_now, utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
@@ -50,6 +51,8 @@ class PodStats:
     last_requested_seq_at: datetime | None = None
     last_requested_from_seq: int | None = None
     last_requested_from_seq_at: datetime | None = None
+    drift_anomalies: int = 0
+    last_drift_s: float | None = None
 
     @property
     def missing_rate(self) -> float:
@@ -86,6 +89,7 @@ class PodRouter:
         self._consumer_task: asyncio.Task[None] | None = None
         self._resend_controllers: dict[str, ResendController] = {}
         self._stats: dict[str, PodStats] = {}
+        self._alignment_by_pod: dict[str, AlignmentState] = {}
 
     def start(self) -> None:
         if self._consumer_task is not None:
@@ -187,6 +191,7 @@ class PodRouter:
             stats.last_seq_high_water = None
             stats.last_uptime_s = None
             quality_flags.append("sequence_reset")
+            reset_alignment(self._alignment_state_for(record.pod_id))
 
         if record.seq in stats.seen_sequences:
             stats.duplicates += 1
@@ -198,6 +203,22 @@ class PodRouter:
             stats.missing += record.seq - stats.last_seq_high_water - 1
             quality_flags.append("seq_gap")
             await self._request_from_seq(record.pod_id, missing_from, stats=stats)
+
+        alignment = align_sample(
+            self._alignment_state_for(record.pod_id),
+            gateway_ts_utc=record.ts_pc_utc,
+            ts_uptime_s=record.ts_uptime_s,
+            drift_threshold_s=max(DEFAULT_DRIFT_THRESHOLD_S, float(self.firmware.sample_interval_s * 2)),
+        )
+        stats.last_drift_s = alignment.drift_s
+        if alignment.anomalous:
+            stats.drift_anomalies += 1
+            quality_flags.append("time_sync_anomaly")
+            self._log_gateway_event(
+                level="warning",
+                pod_id=record.pod_id,
+                message=f"time_sync_anomaly drift_s={alignment.drift_s:.1f} seq={record.seq}",
+            )
 
         write_result = self.writer.write_record(record, quality_flags=tuple(dict.fromkeys(quality_flags)))
         if write_result.duplicate:
@@ -277,7 +298,16 @@ class PodRouter:
             last_requested_seq_at=stats.last_requested_seq_at,
             last_requested_from_seq=stats.last_requested_from_seq,
             last_requested_from_seq_at=stats.last_requested_from_seq_at,
+            drift_anomalies=stats.drift_anomalies,
+            last_drift_s=stats.last_drift_s,
         )
+
+    def _alignment_state_for(self, pod_id: str) -> AlignmentState:
+        state = self._alignment_by_pod.get(pod_id)
+        if state is None:
+            state = AlignmentState()
+            self._alignment_by_pod[pod_id] = state
+        return state
 
     def _build_writer(self):
         if self.storage_backend == "sqlite":
@@ -349,6 +379,7 @@ class PodRouter:
             return
         stats.last_requested_seq = int(seq)
         stats.last_requested_seq_at = utc_now()
+        self._log_gateway_event(level="warning", pod_id=pod_id, message=f"resend_request seq={seq}")
         await controller.request_seq(pod_id, seq)
 
     async def _request_from_seq(self, pod_id: str, from_seq: int, *, stats: PodStats) -> None:
@@ -360,6 +391,7 @@ class PodRouter:
             return
         stats.last_requested_from_seq = int(from_seq)
         stats.last_requested_from_seq_at = utc_now()
+        self._log_gateway_event(level="warning", pod_id=pod_id, message=f"resend_request from_seq={from_seq}")
         await controller.request_from_seq(pod_id, from_seq)
 
     def _should_skip_seq_request(self, stats: PodStats, seq: int) -> bool:
@@ -383,3 +415,8 @@ class PodRouter:
                 "Pod router task terminated unexpectedly.",
                 exc_info=(type(exc), exc, exc.__traceback__),
             )
+
+    def _log_gateway_event(self, *, level: str, pod_id: str, message: str) -> None:
+        log_event = getattr(self.writer, "log_event", None)
+        if callable(log_event):
+            log_event(ts_pc_utc=utc_now_iso(), level=level, pod_id=pod_id, message=message)

@@ -44,6 +44,43 @@ def read_latest_forecasts(
     return _read_latest_forecasts_jsonl(Path(data_root), pod_id=pod_id)
 
 
+def read_forecasts_in_window(
+    db_path: Path | str | None,
+    *,
+    start_utc: str,
+    end_utc: str,
+    pod_id: str | None = None,
+) -> pd.DataFrame:
+    """Return forecast rows within a UTC window when SQLite forecast tables exist."""
+    if not sqlite_db_exists(db_path) or not _sqlite_has_forecast_tables(db_path):
+        return pd.DataFrame(columns=FORECAST_COLUMNS)
+
+    query = """
+        SELECT f.ts_pc_utc, f.pod_id, f.scenario, f.horizon_min, f.json_forecast, f.json_p25, f.json_p75,
+               f.event_detected, f.event_type, f.event_reason, f.model_version,
+               e.MAE_T, e.RMSE_T, e.MAE_RH, e.RMSE_RH, e.large_error, e.notes AS evaluation_notes
+        FROM forecasts AS f
+        LEFT JOIN evaluations AS e
+            ON e.pod_id = f.pod_id
+           AND e.ts_forecast_utc = f.ts_pc_utc
+           AND e.scenario = f.scenario
+        WHERE f.ts_pc_utc >= ?
+          AND f.ts_pc_utc < ?
+    """
+    parameters: list[object] = [start_utc, end_utc]
+    if pod_id is not None:
+        query += " AND f.pod_id = ?"
+        parameters.append(str(pod_id))
+    query += " ORDER BY f.pod_id ASC, f.ts_pc_utc ASC, f.scenario ASC"
+
+    connection = _connect(db_path)
+    try:
+        frame = pd.read_sql_query(query, connection, params=parameters)
+    finally:
+        connection.close()
+    return _normalize_forecast_frame(frame)
+
+
 def _read_latest_forecasts_sqlite(db_path: Path | str | None, *, pod_id: str | None) -> pd.DataFrame:
     query = """
         SELECT f.ts_pc_utc, f.pod_id, f.scenario, f.horizon_min, f.json_forecast, f.json_p25, f.json_p75,
