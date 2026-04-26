@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Pod Detail</p>
+        <h2>Pod {{ reading.pod_id }}</h2>
+    </div>
+    {% if reading.status %}
+    <span class="status-badge {{ reading.status.css_class }}">{{ reading.status.level_label }}</span>
+    {% elif reading.has_measurement %}
+    <span class="status-badge status-muted">No alert</span>
+    {% else %}
+    <span class="status-badge status-muted">Incomplete</span>
+    {% endif %}
+</section>
+
+<div class="pod-detail-top-grid">
+    <div class="pod-detail-main-column">
+        <section class="hero-panel pod-hero-panel">
+            <div class="pod-hero-header">
+                <div>
+                    <p class="eyebrow">Latest Pod State</p>
+                    <h3>Pod {{ reading.pod_id }} latest sample</h3>
+                </div>
+                <article class="pod-hero-id-card">
+                    <span>Pod ID</span>
+                    <strong>{{ reading.pod_id }}</strong>
+                    <small>Status and forecasts below are anchored to this pod's newest stored reading.</small>
+                </article>
+            </div>
+            <div class="pod-hero-stat-grid">
+                <article class="pod-hero-stat-card">
+                    <span>Last sample</span>
+                    <strong>{{ reading.ts_pc_utc|fmt_ts }}</strong>
+                </article>
+                <article class="pod-hero-stat-card pod-hero-stat-card-temp">
+                    <span>Temperature</span>
+                    <strong>{{ reading.temp_c|fmt_num }} C</strong>
+                </article>
+                <article class="pod-hero-stat-card pod-hero-stat-card-rh">
+                    <span>Humidity</span>
+                    <strong>{{ reading.rh_pct|fmt_num }}%</strong>
+                </article>
+                <article class="pod-hero-stat-card pod-hero-stat-card-dew">
+                    <span>Dew point</span>
+                    <strong>{{ reading.dew_point_c|fmt_num }} C</strong>
+                </article>
+            </div>
+            {% if reading.status %}
+            <article class="pod-hero-message-card">
+                <div class="pod-hero-message-head">
+                    <span class="status-badge {{ reading.status.css_class }}">{{ reading.status.level_label }}</span>
+                    <p class="pod-hero-message-title">Current storage assessment</p>
+                </div>
+                <p>{{ reading.status.description }}</p>
+                <p>{{ reading.status.recommendation }}</p>
+            </article>
+            {% elif not reading.has_measurement %}
+            <article class="pod-hero-message-card pod-hero-message-card-muted">
+                <div class="pod-hero-message-head">
+                    <span class="status-badge status-muted">Incomplete</span>
+                    <p class="pod-hero-message-title">Current storage assessment</p>
+                </div>
+                <p>Latest sample did not include sensor values.</p>
+                {% if reading.last_complete_ts_pc_utc and reading.last_complete_ts_pc_utc != reading.ts_pc_utc %}
+                <p>Last complete measurement: {{ reading.last_complete_ts_pc_utc|fmt_ts }}</p>
+                {% endif %}
+            </article>
+            {% endif %}
+        </section>
+
+        <section class="legend-panel threshold-legend-panel">
+            <div class="threshold-legend-header">
+                <div>
+                    <p class="eyebrow">Alert Rules</p>
+                    <h3>Threshold legend</h3>
+                </div>
+                <p class="threshold-legend-intro">These project rules drive the pod status badge, live alert colour, and forecast warning level for each reading.</p>
+            </div>
+            <div class="threshold-legend-grid">
+                {% for item in threshold_legend %}
+                <article class="threshold-legend-card threshold-legend-card-{{ item.theme }}">
+                    <div class="threshold-legend-card-head">
+                        <span class="threshold-legend-badge">{{ item.metric }}</span>
+                        <p class="threshold-legend-subtitle">{{ item.subtitle }}</p>
+                    </div>
+                    <div class="threshold-legend-band-grid">
+                        {% for band in item.bands %}
+                        <div class="threshold-legend-band threshold-legend-band-{{ band.tone }}">
+                            <span>{{ band.label }}</span>
+                            <strong>{{ band.value }}</strong>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p class="threshold-legend-range">{{ item.range }}</p>
+                    <div class="threshold-legend-note">
+                        <strong>Project note</strong>
+                        <p>{{ item.note }}</p>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="controls-panel time-range-panel">
+            <div class="time-range-header">
+                <div>
+                    <p class="eyebrow">Plot Window</p>
+                    <h3>Choose plot range</h3>
+                </div>
+                <p class="time-range-intro">Switch quickly between common monitoring windows or define an exact custom period for the pod history charts.</p>
+            </div>
+            <div class="time-range-grid">
+                <article class="time-range-card">
+                    <div class="time-range-card-head">
+                        <span class="time-range-badge">Quick ranges</span>
+                        <p class="time-range-card-copy">Use the preset buttons for the most common chart views.</p>
+                    </div>
+                    <div class="preset-links">
+                        {% for value, label in preset_ranges %}
+                        <a class="range-chip {% if charts.window.key == value %}active{% endif %}" href="{{ url_for('pod_detail', pod_id=reading.pod_id, range=value) }}">{{ label }}</a>
+                        {% endfor %}
+                    </div>
+                </article>
+                <article class="time-range-card time-range-card-custom">
+                    <div class="time-range-card-head">
+                        <span class="time-range-badge">Custom window</span>
+                        <p class="time-range-card-copy">Pick a start and end time in {{ display_time_label }} when you need a more exact inspection period.</p>
+                    </div>
+                    <form class="custom-range-form" method="get">
+                        <input type="hidden" name="range" value="custom">
+                        <label>
+                            Start ({{ display_time_label }})
+                            <input type="datetime-local" name="start" value="{{ custom_start }}">
+                        </label>
+                        <label>
+                            End ({{ display_time_label }})
+                            <input type="datetime-local" name="end" value="{{ custom_end }}">
+                        </label>
+                        <button class="time-range-submit" type="submit">Apply window</button>
+                    </form>
+                </article>
+            </div>
+        </section>
+    </div>
+</div>
+
+{% if charts.has_data %}
+<script>{{ charts.plotly_js|safe }}</script>
+<p class="chart-hint">Tip: drag to zoom, use the mouse wheel for finer zoom, and double-click a chart to reset the view.</p>
+<div class="chart-grid chart-grid-stacked">
+    <section class="chart-card">
+        <div class="chart-frame">{{ charts.temp_chart|safe }}</div>
+    </section>
+    <section class="chart-card">
+        <div class="chart-frame">{{ charts.rh_chart|safe }}</div>
+    </section>
+    {% if charts.dew_chart %}
+    <section class="chart-card chart-card-wide">
+        <div class="chart-frame">{{ charts.dew_chart|safe }}</div>
+    </section>
+    {% endif %}
+</div>
+{% else %}
+<section class="empty-state">
+    <h3>No data for this period.</h3>
+    <p>Try a wider range or verify that CSV files exist for the selected pod.</p>
+</section>
+{% endif %}
+
+{% if prediction and prediction.has_prediction %}
+{% if not charts.has_data and prediction.plotly_js %}
+<script>{{ prediction.plotly_js|safe }}</script>
+{% endif %}
+{% include "_prediction_panel.html" %}
+{% endif %}
+{% endblock %}

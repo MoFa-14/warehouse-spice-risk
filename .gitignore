@@ -1,0 +1,25 @@
+# Root-level local artefacts that should not be pushed when the repository
+# boundary is moved from `src/` to the full `DSP/` workspace.
+
+.tmp-tests/
+dashboard_temp_root/
+gateway_temp_root/
+route_smoke_precreated/
+route_smoke_tmp_root/
+temp_sandbox_check/
+verification_temp/
+
+# The old nested repository metadata is kept only as a local safety backup while
+# the full project is tracked from the outer repository root.
+src/.git-src-backup/
+
+# Temporary test artefacts that live inside the former nested repo root.
+src/.tmp-tests/
+src/.tmp-tests-ui/
+src/temp_tests/
+src/dashboard/.tmp-tests/
+src/dashboard_temp_root/
+src/gateway_temp_root/
+src/route_smoke_precreated/
+src/route_smoke_tmp_root/
+src/temp_sandbox_check/

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Data Quality</p>
+        <h2>Gateway health and link metrics</h2>
+    </div>
+</section>
+
+<div class="summary-grid">
+    <article class="summary-card">
+        <span>Pods discovered</span>
+        <strong>{{ health.summary.pod_count }}</strong>
+    </article>
+    <article class="summary-card">
+        <span>Link rows loaded</span>
+        <strong>{{ health.summary.link_rows }}</strong>
+    </article>
+    <article class="summary-card">
+        <span>Latest link snapshot</span>
+        <strong>{{ health.summary.latest_snapshot_ts|fmt_ts }}</strong>
+    </article>
+</div>
+
+{% if health.rows %}
+<div class="table-shell">
+    <table>
+        <thead>
+            <tr>
+                <th>Pod</th>
+                <th>Latest sample</th>
+                <th>Latest link stat</th>
+                <th>Connected</th>
+                <th>RSSI</th>
+                <th>Received</th>
+                <th>Missing</th>
+                <th>Duplicates</th>
+                <th>Missing rate</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in health.rows %}
+            <tr>
+                <td><a href="{{ url_for('pod_detail', pod_id=row.pod_id) }}">{{ row.pod_id }}</a></td>
+                <td>{{ row.latest_sample_ts|fmt_ts }}</td>
+                <td>{{ row.latest_link_ts|fmt_ts }}</td>
+                <td>{% if row.connected is none %}No link data{% elif row.connected %}Yes{% else %}No{% endif %}</td>
+                <td>{{ row.last_rssi|fmt_num(0) }}</td>
+                <td>{{ row.total_received|fmt_num(0) }}</td>
+                <td>{{ row.total_missing|fmt_num(0) }}</td>
+                <td>{{ row.total_duplicates|fmt_num(0) }}</td>
+                <td>{{ row.missing_rate|fmt_pct }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<section class="empty-state">
+    <h3>No health data available</h3>
+    <p>No raw pod files were discovered yet.</p>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,115 @@
+{
+  "selected_day": {
+    "day": "2026-03-29",
+    "shared_minutes": 529,
+    "shared_start_utc": "2026-03-29T12:21:00Z",
+    "shared_end_utc": "2026-03-29T23:59:00Z",
+    "shared_span_hours": 11.633333333333333,
+    "pod_sample_counts": {
+      "02": 571,
+      "01": 531
+    }
+  },
+  "history_minutes": 180,
+  "horizon_minutes": 30,
+  "step_minutes": 10,
+  "seed_step_minutes": 30,
+  "seeded_case_counts": {
+    "01": 0,
+    "02": 0
+  },
+  "evaluated_windows": 76,
+  "scenario_window_counts": {
+    "stable": 67,
+    "disturbed": 9,
+    "overall": 76
+  },
+  "source_counts": {
+    "stable": {
+      "fallback_persistence": 10,
+      "analogue_knn": 57
+    },
+    "overall": {
+      "fallback_persistence": 10,
+      "analogue_knn": 66
+    },
+    "disturbed": {
+      "analogue_knn": 9
+    }
+  },
+  "summary": {
+    "stable": {
+      "windows": 67,
+      "points": 2010,
+      "temp_mae": 0.29960487096537,
+      "temp_rmse": 0.3905049590272845,
+      "rh_mae": 2.0456762693682387,
+      "rh_rmse": 3.0623725420491064,
+      "dew_mae": 0.48572583841208294,
+      "dew_rmse": 0.6587593823008441
+    },
+    "overall": {
+      "windows": 76,
+      "points": 2280,
+      "temp_mae": 0.3164222765966639,
+      "temp_rmse": 0.4054838704582179,
+      "rh_mae": 2.1397569304518242,
+      "rh_rmse": 3.1102384192969614,
+      "dew_mae": 0.49062932833770934,
+      "dew_rmse": 0.6572612901879986
+    },
+    "pod:01": {
+      "windows": 38,
+      "points": 1140,
+      "temp_mae": 0.3759788637333041,
+      "temp_rmse": 0.4578387476056607,
+      "rh_mae": 3.49179177964377,
+      "rh_rmse": 4.280608026476688,
+      "dew_mae": 0.6928534763447831,
+      "dew_rmse": 0.8537893287513999
+    },
+    "pod:02": {
+      "windows": 38,
+      "points": 1140,
+      "temp_mae": 0.25686568946002375,
+      "temp_rmse": 0.34527962522343225,
+      "rh_mae": 0.7877220812598792,
+      "rh_rmse": 1.0117119023739318,
+      "dew_mae": 0.2884051803306354,
+      "dew_rmse": 0.3674623644258269
+    },
+    "disturbed": {
+      "windows": 9,
+      "points": 270,
+      "temp_mae": 0.4416185185185181,
+      "temp_rmse": 0.5031675904448474,
+      "rh_mae": 2.8401351851851846,
+      "rh_rmse": 3.4457364252126177,
+      "dew_mae": 0.5271330866729279,
+      "dew_rmse": 0.6459996370397949
+    }
+  },
+  "per_pod_summary": {
+    "01": {
+      "windows": 38,
+      "points": 1140,
+      "temp_mae": 0.3759788637333041,
+      "temp_rmse": 0.4578387476056607,
+      "rh_mae": 3.49179177964377,
+      "rh_rmse": 4.280608026476688,
+      "dew_mae": 0.6928534763447831,
+      "dew_rmse": 0.8537893287513999
+    },
+    "02": {
+      "windows": 38,
+      "points": 1140,
+      "temp_mae": 0.25686568946002375,
+      "temp_rmse": 0.34527962522343225,
+      "rh_mae": 0.7877220812598792,
+      "rh_rmse": 1.0117119023739318,
+      "dew_mae": 0.2884051803306354,
+      "dew_rmse": 0.3674623644258269
+    }
+  },
+  "window_records_path": "C:\\Users\\TERA MAX\\Desktop\\DSP\\evaluation\\results\\forecast_metrics.csv"
+}

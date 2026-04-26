@@ -1,0 +1,224 @@
+<section class="section-heading compact">
+    <div>
+        <p class="eyebrow">Latest Forecast</p>
+        <h3>Pod {{ prediction.pod_id }} 30-minute outlook</h3>
+    </div>
+    {% if prediction.event_detected %}
+    <span class="status-badge level-warning">Event: {{ prediction.event_type }}</span>
+    {% else %}
+    <span class="status-badge status-muted">No active event</span>
+    {% endif %}
+</section>
+
+<section class="summary-grid forecast-scenario-grid">
+    <article class="summary-card prediction-summary-card">
+        <div class="card-head">
+            <div>
+                <span>Scenario</span>
+                <strong>Baseline</strong>
+            </div>
+            {% if prediction.baseline.predicted_status %}
+            <span class="status-badge {{ prediction.baseline.predicted_status.status.css_class }}">{{ prediction.baseline.predicted_status.status.level_label }}</span>
+            {% endif %}
+        </div>
+        <p class="muted-copy">Forecast time: {{ prediction.ts_pc_utc|fmt_ts }}</p>
+        <div class="forecast-overview-grid">
+            <div class="forecast-highlight-card">
+                <span>Source</span>
+                <strong>{{ prediction.baseline.source|replace('_', ' ') }}</strong>
+                <small>{{ prediction.baseline.neighbor_count }} neighbours from {{ prediction.baseline.case_count }} cases</small>
+            </div>
+            <div class="forecast-highlight-card">
+                <span>30 min end</span>
+                <strong>{{ prediction.baseline.temp_end_c|fmt_num }} C / {{ prediction.baseline.rh_end_pct|fmt_num }}%</strong>
+                <small>Dew {{ prediction.baseline.dew_end_c|fmt_num }} C</small>
+            </div>
+            <div class="forecast-highlight-card">
+                <span>Worst predicted point</span>
+                {% if prediction.baseline.predicted_status %}
+                <strong>+{{ prediction.baseline.predicted_status.horizon_minute }} min</strong>
+                <small>{{ prediction.baseline.predicted_status.temp_c|fmt_num }} C / {{ prediction.baseline.predicted_status.rh_pct|fmt_num }}%</small>
+                {% else %}
+                <strong>No alert point</strong>
+                <small>Forecast stayed unclassified</small>
+                {% endif %}
+            </div>
+        </div>
+        {% if prediction.baseline.predicted_status %}
+        <p class="card-message">{{ prediction.baseline.predicted_status.status.description }}</p>
+        <p class="card-recommendation">{{ prediction.baseline.predicted_status.status.recommendation }}</p>
+        {% endif %}
+        {% if prediction.baseline.evaluation %}
+        <div class="forecast-eval">
+            <strong>Latest evaluation</strong>
+            <p>RMSE temp {{ prediction.baseline.evaluation.rmse_temp_c|fmt_num }} C</p>
+            <p>RMSE RH {{ prediction.baseline.evaluation.rmse_rh_pct|fmt_num }}%</p>
+        </div>
+        {% endif %}
+        <p class="muted-copy">{{ prediction.baseline.notes }}</p>
+    </article>
+
+    {% if prediction.event_persist %}
+    <article class="summary-card prediction-summary-card prediction-summary-card-alt">
+        <div class="card-head">
+            <div>
+                <span>Scenario</span>
+                <strong>Event persist</strong>
+            </div>
+            {% if prediction.event_persist.predicted_status %}
+            <span class="status-badge {{ prediction.event_persist.predicted_status.status.css_class }}">{{ prediction.event_persist.predicted_status.status.level_label }}</span>
+            {% endif %}
+        </div>
+        <div class="forecast-overview-grid">
+            <div class="forecast-highlight-card">
+                <span>Source</span>
+                <strong>{{ prediction.event_persist.source|replace('_', ' ') }}</strong>
+                <small>Assumes the current short-term slope continues</small>
+            </div>
+            <div class="forecast-highlight-card">
+                <span>30 min end</span>
+                <strong>{{ prediction.event_persist.temp_end_c|fmt_num }} C / {{ prediction.event_persist.rh_end_pct|fmt_num }}%</strong>
+                <small>Dew {{ prediction.event_persist.dew_end_c|fmt_num }} C</small>
+            </div>
+            <div class="forecast-highlight-card">
+                <span>If event persists</span>
+                <strong>{{ prediction.event_persist.temp_peak_c|fmt_num }} C at +{{ prediction.event_persist.temp_peak_minute }} min</strong>
+                <small>RH {{ prediction.event_persist.rh_peak_pct|fmt_num }}% | Dew {{ prediction.event_persist.dew_peak_c|fmt_num }} C</small>
+            </div>
+        </div>
+        {% if prediction.event_persist.predicted_status %}
+        <p class="card-message">{{ prediction.event_persist.predicted_status.status.description }}</p>
+        <p class="card-recommendation">{{ prediction.event_persist.predicted_status.status.recommendation }}</p>
+        {% endif %}
+        {% if prediction.event_persist.evaluation %}
+        <div class="forecast-eval">
+            <strong>Latest evaluation</strong>
+            <p>RMSE temp {{ prediction.event_persist.evaluation.rmse_temp_c|fmt_num }} C</p>
+            <p>RMSE RH {{ prediction.event_persist.evaluation.rmse_rh_pct|fmt_num }}%</p>
+        </div>
+        {% endif %}
+        <p class="muted-copy">{{ prediction.event_persist.notes }}</p>
+    </article>
+    {% endif %}
+</section>
+
+{% if prediction.event_detected and prediction.event_reason %}
+<section class="legend-panel prediction-reason">
+    <h4>Event reason</h4>
+    <p>{{ prediction.event_reason }}</p>
+    <small>Model version: {{ prediction.model_version }}</small>
+</section>
+{% endif %}
+
+{% if prediction.temp_chart or prediction.rh_chart or prediction.dew_chart or prediction.comparison_chart %}
+<p class="chart-hint">Tip: drag to zoom, use the mouse wheel for finer zoom, and double-click a chart to reset the view.</p>
+<div class="chart-grid chart-grid-stacked">
+    {% if prediction.temp_chart %}
+    <section class="chart-card forecast-chart-card">
+        <div class="chart-frame">{{ prediction.temp_chart|safe }}</div>
+        <div class="forecast-metric-summary-grid">
+            {% for card in prediction.temp_summary_cards %}
+            <article class="forecast-metric-summary-card forecast-metric-summary-card-{{ card.metric_key }} {% if card.scenario_key == 'event' %}forecast-metric-summary-card-event{% endif %}">
+                <div class="forecast-metric-summary-head">
+                    <span class="forecast-metric-badge">{{ card.scenario_label }}</span>
+                    <p class="forecast-metric-headline">{{ card.headline }}</p>
+                </div>
+                <p class="forecast-metric-supporting">{{ card.supporting_line }}</p>
+                <div class="forecast-metric-stat-grid">
+                    <div class="forecast-metric-stat">
+                        <span>Now</span>
+                        <strong>{{ card.current_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>+30 min</span>
+                        <strong>{{ card.end_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>Peak</span>
+                        <strong>{{ card.peak_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>Change</span>
+                        <strong>{{ card.delta_value }}</strong>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    {% if prediction.rh_chart %}
+    <section class="chart-card forecast-chart-card">
+        <div class="chart-frame">{{ prediction.rh_chart|safe }}</div>
+        <div class="forecast-metric-summary-grid">
+            {% for card in prediction.rh_summary_cards %}
+            <article class="forecast-metric-summary-card forecast-metric-summary-card-{{ card.metric_key }} {% if card.scenario_key == 'event' %}forecast-metric-summary-card-event{% endif %}">
+                <div class="forecast-metric-summary-head">
+                    <span class="forecast-metric-badge">{{ card.scenario_label }}</span>
+                    <p class="forecast-metric-headline">{{ card.headline }}</p>
+                </div>
+                <p class="forecast-metric-supporting">{{ card.supporting_line }}</p>
+                <div class="forecast-metric-stat-grid">
+                    <div class="forecast-metric-stat">
+                        <span>Now</span>
+                        <strong>{{ card.current_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>+30 min</span>
+                        <strong>{{ card.end_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>Peak</span>
+                        <strong>{{ card.peak_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>Change</span>
+                        <strong>{{ card.delta_value }}</strong>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    {% if prediction.dew_chart %}
+    <section class="chart-card forecast-chart-card">
+        <div class="chart-frame">{{ prediction.dew_chart|safe }}</div>
+        <div class="forecast-metric-summary-grid">
+            {% for card in prediction.dew_summary_cards %}
+            <article class="forecast-metric-summary-card forecast-metric-summary-card-{{ card.metric_key }} {% if card.scenario_key == 'event' %}forecast-metric-summary-card-event{% endif %}">
+                <div class="forecast-metric-summary-head">
+                    <span class="forecast-metric-badge">{{ card.scenario_label }}</span>
+                    <p class="forecast-metric-headline">{{ card.headline }}</p>
+                </div>
+                <p class="forecast-metric-supporting">{{ card.supporting_line }}</p>
+                <div class="forecast-metric-stat-grid">
+                    <div class="forecast-metric-stat">
+                        <span>Now</span>
+                        <strong>{{ card.current_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>+30 min</span>
+                        <strong>{{ card.end_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>Peak</span>
+                        <strong>{{ card.peak_value }}</strong>
+                    </div>
+                    <div class="forecast-metric-stat">
+                        <span>Change</span>
+                        <strong>{{ card.delta_value }}</strong>
+                    </div>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+    {% if prediction.comparison_chart %}
+    <section class="chart-card">
+        <div class="chart-frame">{{ prediction.comparison_chart|safe }}</div>
+    </section>
+    {% endif %}
+</div>
+{% endif %}

@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Prediction</p>
+        <h2>Latest warehouse forecasts</h2>
+    </div>
+</section>
+
+{% set prediction_page = prediction %}
+{% if prediction_page.plotly_js %}
+<script>{{ prediction_page.plotly_js|safe }}</script>
+{% endif %}
+
+{% if prediction.has_predictions %}
+<section class="controls-panel">
+    <div class="preset-links">
+        {% for item in prediction_page.predictions %}
+        <a class="range-chip {% if prediction_page.selected_prediction and prediction_page.selected_prediction.pod_id == item.pod_id %}active{% endif %}" href="{{ url_for('prediction', pod=item.pod_id) }}#prediction-pod-{{ item.pod_id }}">Pod {{ item.pod_id }}</a>
+        {% endfor %}
+    </div>
+</section>
+
+<section class="summary-grid">
+    {% for item in prediction_page.predictions %}
+    <article class="summary-card prediction-card">
+        <div class="card-head">
+            <div>
+                <span>Pod</span>
+                <strong>{{ item.pod_id }}</strong>
+            </div>
+            {% if item.event_detected %}
+            <span class="status-badge level-warning">{{ item.event_type }}</span>
+            {% else %}
+            <span class="status-badge status-muted">Stable</span>
+            {% endif %}
+        </div>
+        <p class="muted-copy">Forecast time: {{ item.ts_pc_utc|fmt_ts }}</p>
+        <p class="muted-copy">Baseline source: {{ item.baseline.source }}</p>
+        <p class="muted-copy">End temp: {{ item.baseline.temp_end_c|fmt_num }} C</p>
+        <p class="muted-copy">End RH: {{ item.baseline.rh_end_pct|fmt_num }}%</p>
+        {% if item.baseline.evaluation %}
+        <p class="muted-copy">Baseline RMSE: {{ item.baseline.evaluation.rmse_temp_c|fmt_num }} C / {{ item.baseline.evaluation.rmse_rh_pct|fmt_num }}%</p>
+        {% endif %}
+        <div class="card-actions">
+            <a class="button-link" href="#prediction-pod-{{ item.pod_id }}">Jump to forecast</a>
+            <a class="button-link" href="{{ url_for('pod_detail', pod_id=item.pod_id) }}">Open pod</a>
+        </div>
+    </article>
+    {% endfor %}
+</section>
+
+{% for item in prediction_page.predictions %}
+<section id="prediction-pod-{{ item.pod_id }}">
+    {% set prediction = item %}
+    {% include "_prediction_panel.html" %}
+</section>
+{% endfor %}
+{% else %}
+<section class="empty-state">
+    <h3>No stored forecasts yet.</h3>
+    <p>Run the forecasting CLI first, then this page will show the latest baseline and event-persist scenarios per pod.</p>
+</section>
+{% endif %}
+
+{% if prediction_page.pod1_forecast_test %}
+{% set forecast_test = prediction_page.pod1_forecast_test %}
+<section id="pod-1-forecasting-test">
+    {% include "_forecast_test_panel.html" %}
+</section>
+{% endif %}
+{% endblock %}

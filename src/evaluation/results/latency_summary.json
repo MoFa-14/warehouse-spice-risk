@@ -1,0 +1,17 @@
+{
+  "sample_count": 50,
+  "pod_id": "99",
+  "tcp_port": 8876,
+  "dashboard_port": 5051,
+  "metrics": {
+    "median_gateway_ingestion_ms": 0.9805,
+    "median_db_availability_ms": 18.140500000000003,
+    "median_db_after_gateway_ms": 18.0095,
+    "median_dashboard_visibility_ms": 48.1415,
+    "worst_end_to_end_ms": 88.67
+  },
+  "records_path": "C:\\Users\\TERA MAX\\Desktop\\DSP\\evaluation\\results\\latency_records.csv",
+  "timing_log_path": "C:\\Users\\TERA MAX\\Desktop\\DSP\\evaluation\\results\\latency_gateway_events.jsonl",
+  "db_path": "C:\\Users\\TERA MAX\\Desktop\\DSP\\evaluation\\results\\latency_telemetry.sqlite",
+  "measurement_path": "Synthetic/TCP probe -> gateway TCP ingester -> router -> SQLite -> dashboard JSON route"
+}

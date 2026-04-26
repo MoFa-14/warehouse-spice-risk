@@ -1,0 +1,87 @@
+<section class="section-heading compact">
+    <div>
+        <p class="eyebrow">Historical Forecasting Analysis</p>
+        <h3>{{ forecast_test.title }}</h3>
+    </div>
+    <span class="status-badge status-muted">{{ forecast_test.session.completed_window_count }} completed windows</span>
+</section>
+
+<section class="summary-grid forecast-test-summary-grid">
+    <article class="summary-card prediction-summary-card">
+        <div class="card-head">
+            <div>
+                <span>Selected session</span>
+                <strong>{{ forecast_test.session.start_utc|fmt_ts }} to {{ forecast_test.session.end_utc|fmt_ts }}</strong>
+            </div>
+            {% if forecast_test.large_error %}
+            <span class="status-badge level-warning">Large error flagged</span>
+            {% else %}
+            <span class="status-badge status-muted">Completed evaluation</span>
+            {% endif %}
+        </div>
+        <p class="muted-copy">Duration: {{ (forecast_test.session.duration.total_seconds() / 3600)|fmt_num }} hours</p>
+        <p class="muted-copy">Readings in session: {{ forecast_test.session.raw_reading_count }}</p>
+        <p class="muted-copy">Forecast-grid minutes in session: {{ forecast_test.session.grid_point_count }}</p>
+        <p class="muted-copy">Completed forecast windows: {{ forecast_test.session.completed_window_count }}</p>
+        <p class="muted-copy">Selected forecast timestamp: {{ forecast_test.selected_attempt_ts_utc|fmt_ts }}</p>
+        <p class="muted-copy">Forecast source: {{ forecast_test.selected_attempt_source }} ({{ forecast_test.selected_attempt_neighbor_count }} neighbours / {{ forecast_test.selected_attempt_case_count }} cases)</p>
+        <p class="muted-copy">Forecast missing rate: {{ forecast_test.selected_attempt_missing_rate|fmt_num(3) }}</p>
+        {% if forecast_test.rmse_temp_c is not none or forecast_test.rmse_rh_pct is not none %}
+        <div class="forecast-eval">
+            <strong>Selected window errors</strong>
+            <p>Model RMSE temp {{ forecast_test.rmse_temp_c|fmt_num }} C</p>
+            <p>Model RMSE RH {{ forecast_test.rmse_rh_pct|fmt_num }}%</p>
+            <p>Persistence RMSE temp {{ forecast_test.persist_rmse_temp_c|fmt_num }} C</p>
+            <p>Persistence RMSE RH {{ forecast_test.persist_rmse_rh_pct|fmt_num }}%</p>
+            <p>RMSE advantage vs persistence {{ forecast_test.temp_rmse_advantage_c|fmt_num }} C / {{ forecast_test.rh_rmse_advantage_pct|fmt_num }}%</p>
+        </div>
+        {% endif %}
+        <p class="muted-copy">{{ forecast_test.session_definition }}</p>
+        {% if forecast_test.selected_attempt_notes %}
+        <p class="muted-copy">{{ forecast_test.selected_attempt_notes }}</p>
+        {% endif %}
+        {% if forecast_test.evaluation_notes %}
+        <p class="muted-copy">Evaluation notes: {{ forecast_test.evaluation_notes }}</p>
+        {% endif %}
+        <p class="muted-copy">Uses stored completed baseline forecasts plus reconstructed actual and persistence series on the 1-minute forecast grid.</p>
+    </article>
+</section>
+
+<section class="controls-panel forecast-test-controls">
+    <form method="get" action="{{ url_for('prediction') }}" class="forecast-test-form">
+        {% if prediction_page.selected_prediction %}
+        <input type="hidden" name="pod" value="{{ prediction_page.selected_prediction.pod_id }}">
+        {% endif %}
+        <label>
+            Forecast attempt
+            <select name="test_attempt">
+                {% for option in forecast_test.attempt_options %}
+                <option value="{{ option.query_value }}" {% if option.selected %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <button type="submit">Load attempt</button>
+    </form>
+    <div class="preset-links">
+        {% if forecast_test.previous_attempt_query %}
+        <a class="button-link" href="{{ url_for('prediction', pod=prediction_page.selected_prediction.pod_id if prediction_page.selected_prediction else None, test_attempt=forecast_test.previous_attempt_query) }}#pod-1-forecasting-test">Previous attempt</a>
+        {% endif %}
+        {% if forecast_test.next_attempt_query %}
+        <a class="button-link" href="{{ url_for('prediction', pod=prediction_page.selected_prediction.pod_id if prediction_page.selected_prediction else None, test_attempt=forecast_test.next_attempt_query) }}#pod-1-forecasting-test">Next attempt</a>
+        {% endif %}
+    </div>
+</section>
+
+<p class="chart-hint">The overview chart shows the longest clean Pod 1 session with completed forecast windows. The detail chart overlays the 3-hour model input history, the stored forecast, the reconstructed actual next 30 minutes, and the persistence baseline for the selected completed attempt.</p>
+<div class="chart-grid chart-grid-stacked">
+    {% if forecast_test.session_chart %}
+    <section class="chart-card">
+        <div class="chart-frame">{{ forecast_test.session_chart|safe }}</div>
+    </section>
+    {% endif %}
+    {% if forecast_test.detail_chart %}
+    <section class="chart-card">
+        <div class="chart-frame">{{ forecast_test.detail_chart|safe }}</div>
+    </section>
+    {% endif %}
+</div>

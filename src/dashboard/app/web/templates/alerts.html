@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Alerts</p>
+        <h2>Active storage alerts</h2>
+    </div>
+</section>
+
+{% if active_alerts %}
+<div class="table-shell">
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Pod</th>
+                <th>Level</th>
+                <th>Temperature</th>
+                <th>Humidity</th>
+                <th>Message</th>
+                <th>Recommendation</th>
+                <th>Acknowledge</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for alert in active_alerts %}
+            <tr>
+                <td>{{ alert.ts_pc_utc|fmt_ts }}</td>
+                <td><a href="{{ url_for('pod_detail', pod_id=alert.pod_id) }}">{{ alert.pod_id }}</a></td>
+                <td><span class="status-badge {{ alert.css_class }}">{{ alert.level_label }}</span></td>
+                <td>{{ alert.temp_c|fmt_num }} C</td>
+                <td>{{ alert.rh_pct|fmt_num }}%</td>
+                <td>{{ alert.description }}</td>
+                <td>{{ alert.recommendation }}</td>
+                <td>
+                    <form method="post" action="{{ url_for('acknowledge') }}">
+                        <input type="hidden" name="ack_key" value="{{ alert.ack_key }}">
+                        <input type="hidden" name="next" value="{{ url_for('alerts') }}">
+                        <button type="submit">Ack {{ ack_minutes }}m</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<section class="empty-state">
+    <h3>No active alerts</h3>
+    <p>All pods are currently below the warning threshold.</p>
+</section>
+{% endif %}
+
+<section class="section-heading compact">
+    <div>
+        <p class="eyebrow">Acknowledged</p>
+        <h2>Muted temporarily</h2>
+    </div>
+</section>
+
+{% if acknowledged_alerts %}
+<div class="table-shell">
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Pod</th>
+                <th>Level</th>
+                <th>Temperature</th>
+                <th>Humidity</th>
+                <th>Message</th>
+                <th>Acknowledged until</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for alert in acknowledged_alerts %}
+            <tr>
+                <td>{{ alert.ts_pc_utc|fmt_ts }}</td>
+                <td>{{ alert.pod_id }}</td>
+                <td><span class="status-badge {{ alert.css_class }}">{{ alert.level_label }}</span></td>
+                <td>{{ alert.temp_c|fmt_num }} C</td>
+                <td>{{ alert.rh_pct|fmt_num }}%</td>
+                <td>{{ alert.description }}</td>
+                <td>{{ alert.acknowledged_until|fmt_ts }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<p class="muted-copy">No alerts are currently acknowledged.</p>
+{% endif %}
+{% endblock %}

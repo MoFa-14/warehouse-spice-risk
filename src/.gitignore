@@ -1,0 +1,50 @@
+# Python / editor artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.DS_Store
+Thumbs.db
+.venv/
+.tmp/
+firmware/circuitpython-pod/.venv/
+firmware/circuitpython-pod/__pycache__/
+
+# CircuitPython local deployment artifacts
+boot_out.txt
+settings.toml
+code.py.bak
+*.mpy
+
+# Keep only a placeholder for local CircuitPython library bundles
+firmware/circuitpython-pod/lib/*
+!firmware/circuitpython-pod/lib/.gitkeep
+
+# Gateway runtime outputs
+gateway/logs/*.csv
+gateway/logs/.lock
+!gateway/logs/.gitkeep
+gateway/gateway/logs/*.csv
+gateway/gateway/logs/.lock
+
+data/raw/**
+!data/raw/.gitkeep
+data/processed/**
+!data/processed/.gitkeep
+data/exports/**
+!data/exports/.gitkeep
+data/ml/**
+data/db/*.sqlite
+data/db/*.sqlite-*
+data/db/*.sqlite.lock
+data/db/.lock
+!data/db/.gitkeep
+!data/.gitkeep
+data/online/**
+
+dashboard/app/runtime/*.json
+!dashboard/app/runtime/.gitkeep
+dashboard/app/runtime/*.log
+
+evaluation/results/dashboard_runtime/
+evaluation/results/*.sqlite

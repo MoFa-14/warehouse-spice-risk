@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="section-heading">
+    <div>
+        <p class="eyebrow">Monitoring Review</p>
+        <h2>{{ review.scope_label }} review summary</h2>
+    </div>
+</section>
+
+<section class="controls-panel">
+    <div class="preset-links">
+        <a class="range-chip {% if review.window.key == '24h' %}active{% endif %}" href="{{ url_for('review', range='24h', pod=review.selected_pod_id) }}">24h</a>
+        <a class="range-chip {% if review.window.key == '7d' %}active{% endif %}" href="{{ url_for('review', range='7d', pod=review.selected_pod_id) }}">7d</a>
+        <a class="range-chip {% if not review.selected_pod_id %}active{% endif %}" href="{{ url_for('review', range=review.window.key) }}">All pods</a>
+        {% for pod in review.available_pods %}
+        <a class="range-chip {% if review.selected_pod_id == pod %}active{% endif %}" href="{{ url_for('review', range=review.window.key, pod=pod) }}">Pod {{ pod }}</a>
+        {% endfor %}
+    </div>
+    <div class="muted-copy">
+        Generated {{ review.generated_at|fmt_ts }} for {{ review.window.start|fmt_ts }} to {{ review.window.end|fmt_ts }}
+    </div>
+</section>
+
+<div class="summary-grid">
+    <article class="summary-card">
+        <span>Pods in scope</span>
+        <strong>{{ review.summary.pod_count }}</strong>
+    </article>
+    <article class="summary-card">
+        <span>Samples reviewed</span>
+        <strong>{{ review.summary.sample_count }}</strong>
+    </article>
+    <article class="summary-card">
+        <span>Threshold excursions</span>
+        <strong>{{ review.summary.excursion_count }}</strong>
+    </article>
+    <article class="summary-card">
+        <span>Worst severity</span>
+        <strong>{{ review.summary.worst_level_label }}</strong>
+    </article>
+    <article class="summary-card">
+        <span>Recommendation-triggering events</span>
+        <strong>{{ review.summary.recommendation_event_count }}</strong>
+    </article>
+    <article class="summary-card">
+        <span>Active acknowledgements</span>
+        <strong>{{ review.summary.active_acknowledgement_count }}</strong>
+    </article>
+</div>
+
+{% if review.rows %}
+<div class="table-shell">
+    <table>
+        <thead>
+            <tr>
+                <th>Pod</th>
+                <th>Samples</th>
+                <th>Excursions</th>
+                <th>Worst level</th>
+                <th>Temperature trend</th>
+                <th>RH trend</th>
+                <th>Missing</th>
+                <th>Duplicates</th>
+                <th>Reconnects</th>
+                <th>Missing rate</th>
+                <th>Recommendation events</th>
+                <th>Gateway warnings</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in review.rows %}
+            <tr>
+                <td><a href="{{ url_for('pod_detail', pod_id=row.pod_id) }}">{{ row.pod_id }}</a></td>
+                <td>{{ row.sample_count }}</td>
+                <td>{{ row.excursion_count }}</td>
+                <td>{{ row.worst_level_label }}</td>
+                <td>{{ row.temp_trend_summary }}</td>
+                <td>{{ row.rh_trend_summary }}</td>
+                <td>{{ row.link_missing_samples }}</td>
+                <td>{{ row.duplicate_count }}</td>
+                <td>{{ row.reconnect_count }}</td>
+                <td>{{ row.missing_rate|fmt_pct }}</td>
+                <td>{{ row.recommendation_event_count }}</td>
+                <td>{{ row.gateway_warning_count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<section class="empty-state">
+    <h3>No review data available</h3>
+    <p>No telemetry was found for the requested review window.</p>
+</section>
+{% endif %}
+{% endblock %}
