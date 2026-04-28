@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Gateway storage package.
+# - Project role: Stores raw telemetry, link diagnostics, and exportable datasets in
+#   canonical formats.
+# - Main data or concerns: SQLite rows, CSV rows, schema definitions, and storage
+#   paths.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
+# - Why this matters: Persistence code matters because the rest of the project only
+#   sees what this layer records and exposes.
+
 """Gateway storage package.
 
 Keep package-level imports intentionally light so submodule imports like

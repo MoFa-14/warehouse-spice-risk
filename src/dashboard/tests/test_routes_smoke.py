@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for routes smoke behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import csv
@@ -16,9 +25,27 @@ if str(DASHBOARD_ROOT) not in sys.path:
     sys.path.insert(0, str(DASHBOARD_ROOT))
 
 from app.main import create_app
-
+# Class purpose: Groups related regression checks for DashboardRoutesSmoke behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class DashboardRoutesSmokeTests(unittest.TestCase):
+    # Method purpose: Implements the setUp step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
+
     def setUp(self) -> None:
         self.temp_dir = TemporaryDirectory()
         base = Path(self.temp_dir.name)
@@ -392,14 +419,44 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         )
         self.client = self.app.test_client()
         self.expected_dew_text = f"{dew_point:.2f}".encode()
+    # Method purpose: Implements the tearDown step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def tearDown(self) -> None:
         self.temp_dir.cleanup()
+    # Test purpose: Verifies that core routes return 200 behaves as expected
+    #   under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_core_routes_return_200(self) -> None:
         for route in ("/", "/pods/01", "/health", "/alerts", "/prediction", "/review"):
             response = self.client.get(route)
             self.assertEqual(response.status_code, 200, route)
+    # Test purpose: Verifies that pages render expected text behaves as expected
+    #   under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_pages_render_expected_text(self) -> None:
         overview = self.client.get("/").data
@@ -449,6 +506,16 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         self.assertIn(b"review summary", review)
         self.assertIn(b"Threshold excursions", review)
         self.assertIn(b"Recommendation-triggering events", review)
+    # Test purpose: Verifies that pod detail and prediction wrap plotly charts
+    #   in chart frame behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_pod_detail_and_prediction_wrap_plotly_charts_in_chart_frame(self) -> None:
         detail = self.client.get("/pods/01").data
@@ -457,10 +524,30 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         self.assertIn(b"drag to zoom", detail)
         self.assertGreaterEqual(detail.count(b'class="chart-frame"'), 3)
         self.assertGreaterEqual(prediction.count(b'class="chart-frame"'), 2)
+    # Test purpose: Verifies that dashboard disables auto refresh by default
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_dashboard_disables_auto_refresh_by_default(self) -> None:
         response = self.client.get("/")
         self.assertNotIn(b'http-equiv="refresh"', response.data)
+    # Test purpose: Verifies that dashboard can opt in to auto refresh behaves
+    #   as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_dashboard_can_opt_in_to_auto_refresh(self) -> None:
         app = create_app(
@@ -478,6 +565,16 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         response = app.test_client().get("/")
         self.assertIn(b'http-equiv="refresh"', response.data)
         self.assertIn(b'content="5"', response.data)
+    # Test purpose: Verifies that acknowledge post redirects back to alerts
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_acknowledge_post_redirects_back_to_alerts(self) -> None:
         alerts_page = self.client.get("/alerts")
@@ -491,6 +588,16 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
             follow_redirects=True,
         )
         self.assertEqual(response.status_code, 200)
+    # Test purpose: Verifies that latest api route returns JSON behaves as
+    #   expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_latest_api_route_returns_json(self) -> None:
         response = self.client.get("/api/pods/01/latest")
@@ -501,6 +608,16 @@ class DashboardRoutesSmokeTests(unittest.TestCase):
         self.assertAlmostEqual(payload["temp_c"], 25.2)
         self.assertAlmostEqual(payload["rh_pct"], 65.0)
         self.assertEqual(payload["ts_pc_utc"], "2026-03-29T13:00:00Z")
+    # Method purpose: Implements the dew point c step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardRoutesSmokeTests.
+    # - Inputs: Arguments such as temp_c, rh_pct, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     @staticmethod
     def _dew_point_c(temp_c: float, rh_pct: float) -> float:

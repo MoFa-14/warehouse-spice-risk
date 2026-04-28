@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Forecasting package used by the warehouse monitoring prototype.
+# - Project role: Defines feature extraction, analogue matching, scenario
+#   generation, evaluation, and forecasting utilities.
+# - Main data or concerns: Feature vectors, trajectories, event labels, metrics, and
+#   model configuration.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
+# - Why this matters: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+
 """Forecasting package used by the warehouse monitoring prototype.
 
 This module is a useful "map" file to show in a viva because it lists the major

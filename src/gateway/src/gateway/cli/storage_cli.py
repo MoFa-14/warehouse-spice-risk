@@ -1,3 +1,13 @@
+# File overview:
+# - Responsibility: Offline Layer 3 preprocessing and export commands.
+# - Project role: Exposes operator-facing commands for gateway runtime, storage, and
+#   forecasting tasks.
+# - Main data or concerns: CLI arguments, runtime options, and command outcomes.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
+# - Why this matters: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+
 """Offline Layer 3 preprocessing and export commands."""
 
 from __future__ import annotations
@@ -15,7 +25,16 @@ from gateway.storage.import_csv import import_csv_history
 from gateway.storage.paths import build_storage_paths
 from gateway.storage.sqlite_db import init_db, resolve_db_path
 from gateway.storage.sqlite_reader import latest_sample
-
+# Function purpose: Parse storage-layer subcommands.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse storage-layer subcommands."""
@@ -145,7 +164,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             parser.error("--hours must be greater than 0.")
 
     return args
-
+# Function purpose: Run the requested offline storage command.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def cli(argv: Sequence[str] | None = None) -> int:
     """Run the requested offline storage command."""

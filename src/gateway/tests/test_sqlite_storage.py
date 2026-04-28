@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for SQLite storage behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import sys
@@ -20,9 +29,27 @@ from gateway.storage.sqlite_writer import (
     SqliteWriterDependencies,
     SqliteWriterPipeline,
 )
-
+# Class purpose: Groups related regression checks for SqliteStorage behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class SqliteStorageTests(unittest.TestCase):
+    # Test purpose: Verifies that schema creation creates required tables
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteStorageTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_schema_creation_creates_required_tables(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "telemetry.sqlite"
@@ -51,6 +78,16 @@ class SqliteStorageTests(unittest.TestCase):
             self.assertIn("idx_link_time", names)
             self.assertIn("idx_link_pod_time", names)
             self.assertIn("session_id", sample_columns)
+    # Test purpose: Verifies that insert or ignore dedupes same pod and seq
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteStorageTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_insert_or_ignore_dedupes_same_pod_and_seq(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -88,6 +125,16 @@ class SqliteStorageTests(unittest.TestCase):
             rows = samples_in_range(db_path=Path(temp_dir) / "telemetry.sqlite", pod_id="01")
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["seq"], 7)
+    # Test purpose: Verifies that range query returns expected rows behaves as
+    #   expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteStorageTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_range_query_returns_expected_rows(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -144,6 +191,16 @@ class SqliteStorageTests(unittest.TestCase):
             self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["seq"], 1)
             self.assertEqual(latest["seq"], 2)
+    # Test purpose: Verifies that sequence restart reuses seq in new SQLite
+    #   session behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteStorageTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_sequence_restart_reuses_seq_in_new_sqlite_session(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -205,6 +262,16 @@ class SqliteStorageTests(unittest.TestCase):
                 connection.close()
 
             self.assertEqual([(row["session_id"], row["seq"]) for row in rows], [(0, 1), (0, 2), (1, 1)])
+    # Test purpose: Verifies that soft reload sequence drop with higher uptime
+    #   opens new session behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteStorageTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_soft_reload_sequence_drop_with_higher_uptime_opens_new_session(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -255,6 +322,16 @@ class SqliteStorageTests(unittest.TestCase):
                 [(row["session_id"], row["seq"], row["ts_uptime_s"]) for row in rows],
                 [(0, 104, 8207.6), (1, 89, 11640.7)],
             )
+    # Test purpose: Verifies that small sequence restart with higher uptime
+    #   opens new session behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteStorageTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_small_sequence_restart_with_higher_uptime_opens_new_session(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -305,6 +382,16 @@ class SqliteStorageTests(unittest.TestCase):
                 [(row["session_id"], row["seq"], row["ts_uptime_s"]) for row in rows],
                 [(0, 4, 12846.4), (1, 2, 12864.0)],
             )
+    # Test purpose: Verifies that initialize schema moves backfill sessions to
+    #   negative range behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteStorageTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_initialize_schema_moves_backfill_sessions_to_negative_range(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -365,26 +452,98 @@ class SqliteStorageTests(unittest.TestCase):
                 [(row["source"], row["session_id"], row["seq"]) for row in rows],
                 [("BLE", 3, 104), ("CSV_BACKFILL", -2, 134), ("CSV_BACKFILL", -1, 134)],
             )
-
+# Class purpose: Encapsulates the FlakySqliteStorageWriter responsibilities used by
+#   this module.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class _FlakySqliteStorageWriter:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _FlakySqliteStorageWriter.
+    # - Inputs: Arguments such as _db_path, state, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
+
     def __init__(self, _db_path: Path, state: dict[str, int]) -> None:
         self._state = state
+    # Method purpose: Writes sample into the configured destination.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _FlakySqliteStorageWriter.
+    # - Inputs: Arguments such as **kwargs, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns SqliteWriteResult when the function completes
+    #   successfully.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def write_sample(self, **kwargs) -> SqliteWriteResult:
         self._state["attempts"] += 1
         if self._state["attempts"] == 1:
             raise IOError("simulated database lock")
         return SqliteWriteResult(inserted=True, duplicate=False)
+    # Method purpose: Writes link snapshot into the configured destination.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _FlakySqliteStorageWriter.
+    # - Inputs: Arguments such as _snapshot, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def write_link_snapshot(self, _snapshot: LinkSnapshot) -> None:
         return None
+    # Method purpose: Implements the close step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _FlakySqliteStorageWriter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def close(self) -> None:
         return None
-
+# Class purpose: Groups related regression checks for SqliteWriterPipeline behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class SqliteWriterPipelineTests(unittest.IsolatedAsyncioTestCase):
+    # Test purpose: Verifies that writer pipeline recovers after transient
+    #   insert error behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on SqliteWriterPipelineTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     async def test_writer_pipeline_recovers_after_transient_insert_error(self) -> None:
         with TemporaryDirectory() as temp_dir:
             state = {"attempts": 0}

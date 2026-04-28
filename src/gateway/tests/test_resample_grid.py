@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for resample grid behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import sys
@@ -11,9 +20,27 @@ if str(SRC_DIR) not in sys.path:
 
 from gateway.preprocess.clean import CleanSampleRow
 from gateway.preprocess.resample import resample_day
-
+# Class purpose: Groups related regression checks for ResampleGrid behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class ResampleGridTests(unittest.TestCase):
+    # Test purpose: Verifies that resample builds uniform grid and uses last
+    #   sample in bucket behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ResampleGridTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_resample_builds_uniform_grid_and_uses_last_sample_in_bucket(self) -> None:
         rows = [
             CleanSampleRow(

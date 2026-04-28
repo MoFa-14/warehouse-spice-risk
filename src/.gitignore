@@ -24,8 +24,6 @@ firmware/circuitpython-pod/lib/*
 gateway/logs/*.csv
 gateway/logs/.lock
 !gateway/logs/.gitkeep
-gateway/gateway/logs/*.csv
-gateway/gateway/logs/.lock
 
 data/raw/**
 !data/raw/.gitkeep

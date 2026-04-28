@@ -12,8 +12,6 @@ The implemented system combines:
 - a 3-hour input / 30-minute horizon forecasting pipeline
 - a Flask dashboard for live status, alerts, health, prediction views, and review summaries
 
-This README is the main technical reference for the codebase. It intentionally replaces the scattered project documentation that previously existed in multiple subsystem README and notes files.
-
 ## 1. Current System Status
 
 The current codebase is an end-to-end student project implementation with real working subsystems, not just mock interfaces.
@@ -31,14 +29,6 @@ What is implemented:
 - forecast evaluation with MAE and RMSE
 - dashboard views for overview, pod detail, health, alerts, prediction, and monitoring review
 - lightweight calibration, smoothing, monitoring review, and time-alignment diagnostics
-
-What is not implemented:
-
-- full BLE mesh networking
-- packet-sniffer integration
-- distributed clock synchronization
-- industrial compliance or certification logic
-- full production MLOps or retraining infrastructure
 
 ## 2. Repository Layout
 

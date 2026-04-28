@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: BLE service definition for the physical pod.
+# - Project role: Implements device-side sensing, buffering, status tracking, and
+#   BLE behavior on the physical pod.
+# - Main data or concerns: Sensor samples, ring-buffer entries, BLE payloads, status
+#   fields, and timing values.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
+# - Why this matters: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+
 """BLE service definition for the physical pod.
 
 This module is the communication boundary between the firmware and the gateway.
@@ -21,7 +32,15 @@ from config import (
     TELEMETRY_CHAR_UUID,
     TELEMETRY_MAX_LEN,
 )
-
+# Class purpose: Custom service that mirrors the pod communication contract.
+# - Project role: Belongs to the embedded firmware runtime layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 class PodTelemetryService(Service):
     """Custom service that mirrors the pod communication contract.
@@ -55,7 +74,15 @@ class PodTelemetryService(Service):
         properties=Characteristic.READ,
         initial_value=b"",
     )
-
+# Class purpose: Present BLERadio as a small event-driven peripheral wrapper.
+# - Project role: Belongs to the embedded firmware runtime layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 class PodBlePeripheral:
     """Present BLERadio as a small event-driven peripheral wrapper.
@@ -65,6 +92,19 @@ class PodBlePeripheral:
     readable and makes it easier to explain the communication behaviour as a
     sequence of connection, control, status, and telemetry steps.
     """
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on PodBlePeripheral.
+    # - Inputs: Arguments such as device_name, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def __init__(self, device_name):
         self.device_name = device_name
@@ -83,24 +123,78 @@ class PodBlePeripheral:
         # proved more discoverable on Windows than forcing complete_name here.
         self.service.control = ""
         self.service.status = ""
+    # Method purpose: Implements the start advertising step used by this
+    #   subsystem.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on PodBlePeripheral.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Gateway decoding and storage rely on the firmware
+    #   keeping telemetry semantics consistent.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def start_advertising(self):
         if not self.radio.connected and not self._advertising_started:
             self.radio.start_advertising(self.advertisement)
             self._advertising_started = True
             print("BLE advertising as {}".format(self.device_name))
+    # Method purpose: Implements the publish telemetry step used by this
+    #   subsystem.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on PodBlePeripheral.
+    # - Inputs: Arguments such as payload, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Gateway decoding and storage rely on the firmware
+    #   keeping telemetry semantics consistent.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def publish_telemetry(self, payload):
         try:
             self.service.telemetry.write(payload.encode("utf-8"))
         except Exception as exc:
             print("Telemetry notify warning: {}".format(exc))
+    # Method purpose: Implements the update status step used by this subsystem.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on PodBlePeripheral.
+    # - Inputs: Arguments such as payload, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Gateway decoding and storage rely on the firmware
+    #   keeping telemetry semantics consistent.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def update_status(self, payload):
         self.service.status = payload
+    # Method purpose: Implements the is connected step used by this subsystem.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on PodBlePeripheral.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Gateway decoding and storage rely on the firmware
+    #   keeping telemetry semantics consistent.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def is_connected(self):
         return self.radio.connected
+    # Method purpose: Translate BLE state into simple firmware-loop events.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on PodBlePeripheral.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Gateway decoding and storage rely on the firmware
+    #   keeping telemetry semantics consistent.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def poll(self):
         """Translate BLE state into simple firmware-loop events.

@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Lightweight Bristol-inspired weather references for indoor
+#   warehouse trends.
+# - Project role: Generates simulated pod behavior, schedules, faults, and
+#   environmental patterns.
+# - Main data or concerns: Synthetic sensor values, schedules, weather trends, and
+#   simulated disturbances.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
+# - Why this matters: Simulation modules matter because they extend the single
+#   physical pod into a multi-zone experimental system.
+
 """Lightweight Bristol-inspired weather references for indoor warehouse trends."""
 
 from __future__ import annotations
@@ -67,7 +79,16 @@ MONTHLY_OUTDOOR_RH_SWING_PCT = (
 
 ANNUAL_OUTDOOR_TEMP_MEAN_C = sum(MONTHLY_OUTDOOR_TEMP_C) / len(MONTHLY_OUTDOOR_TEMP_C)
 ANNUAL_OUTDOOR_RH_MEAN_PCT = sum(MONTHLY_OUTDOOR_RH_PCT) / len(MONTHLY_OUTDOOR_RH_PCT)
-
+# Class purpose: Indoor warehouse target plus the outdoor reference used to shape
+#   it.
+# - Project role: Belongs to the synthetic pod simulation layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 @dataclass(frozen=True)
 class IndoorClimateTarget:
@@ -77,7 +98,18 @@ class IndoorClimateTarget:
     indoor_rh_pct: float
     outdoor_temp_c: float
     outdoor_rh_pct: float
-
+# Function purpose: Blend a warehouse baseline with a damped Bristol-like seasonal
+#   and day-night trend.
+# - Project role: Belongs to the synthetic pod simulation layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as when_local, base_temp_c, base_rh_pct,
+#   seasonal_temp_weight, seasonal_rh_weight, diurnal_temp_weight,
+#   diurnal_rh_weight, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns IndoorClimateTarget when the function completes successfully.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 def bristol_indoor_target(
     when_local: datetime,
@@ -121,7 +153,16 @@ def bristol_indoor_target(
         outdoor_temp_c=outdoor_temp_c,
         outdoor_rh_pct=outdoor_rh_pct,
     )
-
+# Function purpose: Implements the interpolate monthly step used by this subsystem.
+# - Project role: Belongs to the synthetic pod simulation layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as values, when_local, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns float when the function completes successfully.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 def _interpolate_monthly(values: tuple[float, ...], when_local: datetime) -> float:
     current_index = when_local.month - 1

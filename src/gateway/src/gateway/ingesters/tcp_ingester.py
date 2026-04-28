@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: TCP listener for synthetic pods that speak newline-delimited
+#   JSON.
+# - Project role: Accepts live telemetry from transport-specific sources and
+#   converts it into normalized gateway records.
+# - Main data or concerns: Raw transport messages, decoded telemetry payloads, and
+#   connection events.
+# - Related flow: Receives BLE or TCP input and passes decoded records into routing
+#   and storage.
+# - Why this matters: All later persistence and forecasting logic depends on
+#   ingestion normalizing the live inputs correctly.
+
 """TCP listener for synthetic pods that speak newline-delimited JSON.
 
 The synthetic pod cluster does not emulate BLE directly. Instead it sends the
@@ -26,7 +38,15 @@ from gateway.utils.timeutils import utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
-
+# Class purpose: Configuration for synthetic pod TCP ingestion.
+# - Project role: Belongs to the gateway ingestion layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: All later persistence and forecasting logic depends on
+#   ingestion normalizing the live inputs correctly.
+# - Related flow: Receives BLE or TCP input and passes decoded records into routing
+#   and storage.
 
 @dataclass(frozen=True)
 class TcpIngesterSettings:
@@ -34,7 +54,15 @@ class TcpIngesterSettings:
 
     host: str = "127.0.0.1"
     port: int = 8765
-
+# Class purpose: Accept synthetic pod streams and normalise them for the gateway.
+# - Project role: Belongs to the gateway ingestion layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: All later persistence and forecasting logic depends on
+#   ingestion normalizing the live inputs correctly.
+# - Related flow: Receives BLE or TCP input and passes decoded records into routing
+#   and storage.
 
 class TcpIngester:
     """Accept synthetic pod streams and normalise them for the gateway.
@@ -44,6 +72,19 @@ class TcpIngester:
     controllers, and pushes the resulting records into the same queue consumed
     by the rest of the gateway.
     """
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on TcpIngester.
+    # - Inputs: Arguments such as queue, router, settings, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def __init__(
         self,
@@ -61,6 +102,17 @@ class TcpIngester:
         self._client_tasks: set[asyncio.Task[None]] = set()
         timing_path = str(os.getenv("DSP_EVAL_TIMING_LOG", "")).strip()
         self._timing_log_path = Path(timing_path).expanduser() if timing_path else None
+    # Method purpose: Start the local TCP listener used by the synthetic pod
+    #   cluster.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on TcpIngester.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     async def start(self) -> None:
         """Start the local TCP listener used by the synthetic pod cluster."""
@@ -68,6 +120,16 @@ class TcpIngester:
         sockets = self._server.sockets or []
         for socket in sockets:
             LOGGER.debug("Synthetic TCP listener ready on %s", socket.getsockname())
+    # Method purpose: Implements the stop step used by this subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on TcpIngester.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -80,15 +142,49 @@ class TcpIngester:
         if self._client_tasks:
             await asyncio.gather(*self._client_tasks, return_exceptions=True)
             self._client_tasks.clear()
+    # Method purpose: Implements the accept client step used by this subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on TcpIngester.
+    # - Inputs: Arguments such as reader, writer, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def _accept_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         task = asyncio.create_task(self._handle_client(reader, writer), name="tcp-synthetic-client")
         self._client_tasks.add(task)
+        # Method purpose: Implements the discard step used by this
+        #   subsystem.
+        # - Project role: Belongs to the gateway ingestion layer and acts as
+        #   a method on TcpIngester.
+        # - Inputs: Arguments such as completed, interpreted according to
+        #   the rules encoded in the body below.
+        # - Outputs: No direct return value; the function performs state
+        #   updates or side effects.
+        # - Important decisions: All later persistence and forecasting logic
+        #   depends on ingestion normalizing the live inputs correctly.
+        # - Related flow: Receives BLE or TCP input and passes decoded
+        #   records into routing and storage.
 
         def _discard(completed: asyncio.Task[None]) -> None:
             self._client_tasks.discard(completed)
 
         task.add_done_callback(_discard)
+    # Method purpose: Consume one synthetic pod connection until disconnect.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on TcpIngester.
+    # - Inputs: Arguments such as reader, writer, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         """Consume one synthetic pod connection until disconnect.
@@ -154,12 +250,36 @@ class TcpIngester:
                 writer.close()
                 await writer.wait_closed()
             LOGGER.debug("Synthetic pod disconnected from %s", peer)
+    # Method purpose: Implements the note connection step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on TcpIngester.
+    # - Inputs: Arguments such as pod_id, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def _note_connection(self, pod_id: str) -> None:
         count = self._connect_counts.get(pod_id, 0) + 1
         self._connect_counts[pod_id] = count
         if count > 1:
             self.router.note_reconnect(pod_id, "TCP")
+    # Method purpose: Optionally append a latency-evaluation marker for offline
+    #   analysis.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on TcpIngester.
+    # - Inputs: Arguments such as pod_id, seq, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def _append_timing_event(self, *, pod_id: str, seq: int) -> None:
         """Optionally append a latency-evaluation marker for offline analysis."""

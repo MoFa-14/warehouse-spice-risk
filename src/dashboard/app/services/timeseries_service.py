@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Services for loading pod history and rendering Plotly charts.
+# - Project role: Builds route-ready view models, chart inputs, and interpretive
+#   summaries from loaded data.
+# - Main data or concerns: View models, chart series, classifications, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
+# - Why this matters: Keeping presentation logic here prevents routes and templates
+#   from reimplementing analysis rules.
+
 """Services for loading pod history and rendering Plotly charts.
 
 This module powers the history plots on the pod detail page. It sits between
@@ -35,7 +46,15 @@ RANGE_OPTIONS = {
 }
 EXPECTED_SAMPLE_INTERVAL = timedelta(minutes=1)
 GAP_BRIDGE_THRESHOLD = timedelta(minutes=2)
-
+# Class purpose: Requested chart time window.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class TimeWindow:
@@ -46,7 +65,16 @@ class TimeWindow:
     start: datetime
     end: datetime
     custom: bool
-
+# Function purpose: Resolve a user-requested chart window into concrete UTC bounds.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as range_key, start_text, end_text, display_timezone,
+#   reference_end, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns TimeWindow when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def resolve_time_window(
     range_key: str | None,
@@ -76,7 +104,18 @@ def resolve_time_window(
     delta = RANGE_OPTIONS.get(normalized, RANGE_OPTIONS["24h"])
     resolved_key = normalized if normalized in RANGE_OPTIONS else "24h"
     return TimeWindow(key=resolved_key, label=resolved_key.upper(), start=now - delta, end=now, custom=False)
-
+# Function purpose: Build the chart payload used by the pod detail page.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, window, max_points, db_path,
+#   display_timezone, adjustments_path, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def build_timeseries_context(
     data_root: Path,
@@ -152,7 +191,16 @@ def build_timeseries_context(
         ) if not dew_frame.empty else None,
         "window": window,
     }
-
+# Function purpose: Implements the temperature frame step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, processed_frame, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _temperature_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> pd.DataFrame:
     if not raw_frame.empty and raw_frame["temp_c"].notna().any():
@@ -160,7 +208,16 @@ def _temperature_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -
     if not processed_frame.empty:
         return processed_frame[["ts_pc_utc", "temp_c_clean"]].rename(columns={"temp_c_clean": "value"}).dropna()
     return pd.DataFrame(columns=["ts_pc_utc", "value"])
-
+# Function purpose: Implements the humidity frame step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, processed_frame, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _humidity_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> pd.DataFrame:
     if not raw_frame.empty and raw_frame["rh_pct"].notna().any():
@@ -168,7 +225,16 @@ def _humidity_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> p
     if not processed_frame.empty:
         return processed_frame[["ts_pc_utc", "rh_pct_clean"]].rename(columns={"rh_pct_clean": "value"}).dropna()
     return pd.DataFrame(columns=["ts_pc_utc", "value"])
-
+# Function purpose: Implements the dew point frame step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, processed_frame, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _dewpoint_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> pd.DataFrame:
     if not raw_frame.empty and "dew_point_c" in raw_frame.columns and raw_frame["dew_point_c"].notna().any():
@@ -176,7 +242,18 @@ def _dewpoint_frame(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> p
     if not processed_frame.empty and "dew_point_c" in processed_frame.columns:
         return processed_frame[["ts_pc_utc", "dew_point_c"]].rename(columns={"dew_point_c": "value"}).dropna()
     return pd.DataFrame(columns=["ts_pc_utc", "value"])
-
+# Function purpose: Load the raw telemetry view used as the preferred history
+#   source.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, date_from, date_to, db_path,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _load_raw_frame(
     data_root: Path,
@@ -190,13 +267,31 @@ def _load_raw_frame(
     if db_path is not None and sqlite_db_exists(db_path):
         return read_raw_samples_sqlite(db_path, pod_id=pod_id, date_from=date_from, date_to=date_to)
     return read_raw_samples(find_raw_pod_files(Path(data_root), pod_id, date_from=date_from, date_to=date_to))
-
+# Function purpose: Implements the filter window step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, window, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _filter_window(frame: pd.DataFrame, window: TimeWindow) -> pd.DataFrame:
     if frame.empty:
         return frame
     return frame[(frame["ts_pc_utc"] >= pd.Timestamp(window.start)) & (frame["ts_pc_utc"] <= pd.Timestamp(window.end))].copy()
-
+# Function purpose: Apply dashboard-only calibration and smoothing to raw telemetry.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, adjustments, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _adjust_raw_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
     """Apply dashboard-only calibration and smoothing to raw telemetry."""
@@ -209,7 +304,17 @@ def _adjust_raw_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
         settings=adjustments.dashboard_smoothing,
     )
     return recompute_dew_point(adjusted, temp_column="temp_c", rh_column="rh_pct")
-
+# Function purpose: Implements the adjust processed frame step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, adjustments, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _adjust_processed_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
     if frame.empty:
@@ -221,14 +326,32 @@ def _adjust_processed_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
         settings=adjustments.dashboard_smoothing,
     )
     return recompute_dew_point(adjusted, temp_column="temp_c_clean", rh_column="rh_pct_clean")
-
+# Function purpose: Implements the downsample step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, max_points, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _downsample(frame: pd.DataFrame, max_points: int) -> pd.DataFrame:
     if frame.empty or len(frame) <= max_points:
         return frame
     step = max(1, len(frame) // max_points)
     return frame.iloc[::step].copy()
-
+# Function purpose: Implements the downsample segments step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as segments, max_points, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns list[pd.DataFrame] when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _downsample_segments(segments: list[pd.DataFrame], *, max_points: int) -> list[pd.DataFrame]:
     total_points = sum(len(segment) for segment in segments)
@@ -242,7 +365,17 @@ def _downsample_segments(segments: list[pd.DataFrame], *, max_points: int) -> li
             sampled = pd.concat([sampled, segment.iloc[[-1]].copy()])
         sampled_segments.append(sampled.reset_index(drop=True))
     return sampled_segments
-
+# Function purpose: Builds metric chart for the next stage of the project flow.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, title, y_label, color, max_points,
+#   display_timezone, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns str | None when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _build_metric_chart(
     frame: pd.DataFrame,
@@ -264,7 +397,17 @@ def _build_metric_chart(
     if figure is None:
         return None
     return figure.to_html(full_html=False, include_plotlyjs=False, config=_plotly_chart_config())
-
+# Function purpose: Build one gap-aware Plotly figure for a single metric.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, title, y_label, color, max_points,
+#   display_timezone, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns go.Figure | None when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _build_metric_figure(
     frame: pd.DataFrame,
@@ -342,7 +485,18 @@ def _build_metric_figure(
     )
     figure.update_yaxes(showgrid=True, gridcolor="#e9e2d4", zeroline=False, automargin=True)
     return figure
-
+# Function purpose: Builds chart series for the next stage of the project flow.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as sampled_segments, original_segments, display_timezone,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns tuple[list[datetime | None], list[float | None], list[datetime
+#   | None], list[float | None]] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _build_chart_series(
     sampled_segments: list[pd.DataFrame],
@@ -373,7 +527,16 @@ def _build_chart_series(
         )
         observed_y.extend(float(value) for value in sampled_segment["value"])
     return observed_x, observed_y, gap_x, gap_y
-
+# Function purpose: Implements the split frame on gaps step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns list[pd.DataFrame] when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _split_frame_on_gaps(frame: pd.DataFrame) -> list[pd.DataFrame]:
     if frame.empty:
@@ -388,16 +551,41 @@ def _split_frame_on_gaps(frame: pd.DataFrame) -> list[pd.DataFrame]:
             start_index = index
     segments.append(frame.iloc[start_index:].copy())
     return segments
-
+# Function purpose: Implements the is gap step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as previous_ts, current_ts, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _is_gap(previous_ts: pd.Timestamp, current_ts: pd.Timestamp) -> bool:
     return current_ts.to_pydatetime() - previous_ts.to_pydatetime() >= _gap_threshold()
-
+# Function purpose: Implements the gap threshold step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns timedelta when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _gap_threshold() -> timedelta:
     # Pods publish roughly once per minute; treat 2+ minute jumps as missing-data gaps.
     return max(GAP_BRIDGE_THRESHOLD, EXPECTED_SAMPLE_INTERVAL * 2)
-
+# Function purpose: Implements the plotly chart config step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _plotly_chart_config() -> dict[str, object]:
     return {
@@ -408,11 +596,29 @@ def _plotly_chart_config() -> dict[str, object]:
         "doubleClick": "reset",
         "modeBarButtonsToRemove": ["lasso2d", "select2d"],
     }
-
+# Function purpose: Parses datetime into structured values.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, display_timezone, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns datetime when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _parse_datetime(value: str, display_timezone: tzinfo) -> datetime:
     return parse_datetime_local_input(value, display_timezone)
-
+# Function purpose: Implements the alpha step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as hex_color, opacity, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _alpha(hex_color: str, opacity: float) -> str:
     value = hex_color.lstrip("#")

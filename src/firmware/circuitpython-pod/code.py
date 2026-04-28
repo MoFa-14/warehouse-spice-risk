@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Phase 1 CircuitPython firmware for the physical sensing pod.
+# - Project role: Implements device-side sensing, buffering, status tracking, and
+#   BLE behavior on the physical pod.
+# - Main data or concerns: Sensor samples, ring-buffer entries, BLE payloads, status
+#   fields, and timing values.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
+# - Why this matters: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+
 """Phase 1 CircuitPython firmware for the physical sensing pod.
 
 This file is the top-level runtime loop that executes on the Feather
@@ -38,7 +49,17 @@ from config import (
 from ring_buffer import RingBuffer
 from sensors import SHT45Sensor
 from status import PodStatus
-
+# Function purpose: Serialize payloads in a stable compact form.
+# - Project role: Belongs to the embedded firmware runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as payload, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 def compact_json(payload):
     """Serialize payloads in a stable compact form.
@@ -49,7 +70,17 @@ def compact_json(payload):
     same logical sample always renders in the same shape.
     """
     return json.dumps(payload).replace(", ", ",").replace(": ", ":")
-
+# Function purpose: Serialize one sample into the pod-to-gateway telemetry contract.
+# - Project role: Belongs to the embedded firmware runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as sample, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 def encode_sample_payload(sample):
     """Serialize one sample into the pod-to-gateway telemetry contract.
@@ -72,7 +103,18 @@ def encode_sample_payload(sample):
     if len(payload) > TELEMETRY_MAX_LEN:
         print("Telemetry payload warning: {} bytes".format(len(payload)))
     return payload
-
+# Function purpose: Normalise control writes into text before parsing.
+# - Project role: Belongs to the embedded firmware runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 def normalize_command_value(value):
     """Normalise control writes into text before parsing.
@@ -85,7 +127,17 @@ def normalize_command_value(value):
     if isinstance(value, bytes):
         return value.decode("utf-8", errors="ignore")
     return str(value)
-
+# Function purpose: Parse the minimal Phase 1 control grammar.
+# - Project role: Belongs to the embedded firmware runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as raw_value, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 def parse_control_command(raw_value):
     """Parse the minimal Phase 1 control grammar.
@@ -107,7 +159,17 @@ def parse_control_command(raw_value):
         command, argument = text, ""
 
     return command.strip().upper(), argument.strip()
-
+# Function purpose: Perform one complete sensing cycle.
+# - Project role: Belongs to the embedded firmware runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as sensor, samples, ble, status_obj, seq, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 def take_sample(sensor, samples, ble, status_obj, seq):
     """Perform one complete sensing cycle.
@@ -132,7 +194,16 @@ def take_sample(sensor, samples, ble, status_obj, seq):
 
     print("Sample {}".format(payload))
     return sample
-
+# Function purpose: Boot the pod and keep the acquisition / BLE service loop alive.
+# - Project role: Belongs to the embedded firmware runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 def main():
     """Boot the pod and keep the acquisition / BLE service loop alive.

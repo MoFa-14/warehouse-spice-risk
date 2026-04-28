@@ -1,15 +1,30 @@
-"""Robust event detection over the recent portion of the 3-hour history window.
+# File overview:
+# - Responsibility: Recent-event detection for the forecasting pipeline.
+# - Project role: Defines feature extraction, case matching, scenario generation,
+#   evaluation, and forecasting utilities.
+# - Main data or concerns: Feature vectors, trajectories, event labels, metrics, and
+#   model configuration.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
 
-In this project, forecasting is not treated as one single mode of operation.
-The system first asks a practical warehouse question:
+"""Recent-event detection for the forecasting pipeline.
 
-"Do the latest readings still look like ordinary storage behaviour, or do they
-look like a disturbance that should be interpreted differently?"
+Responsibilities:
+- Inspects the latest part of the 3-hour history window for disturbance-like
+  behaviour.
+- Uses robust 5-minute change statistics rather than single-minute noise.
+- Produces the event label and segment metadata used by both baseline filtering
+  and alternate scenario generation.
 
-This file answers that question using robust 5-minute changes in temperature,
-RH, and dew point. The output is later used by the runner to decide whether it
-should produce only the normal baseline forecast or also generate an
-event-persist scenario.
+Project flow:
+- history window -> event detection -> baseline filtering + scenario selection
+
+Why this matters:
+- The forecasting subsystem operates in two modes: ordinary baseline
+  continuation and disturbance-aware interpretation.
+- Detecting the difference keeps analogue matching focused on normal behaviour
+  while still allowing an alternate event-persist scenario when recent changes
+  look operationally significant.
 """
 
 from __future__ import annotations
@@ -21,25 +36,38 @@ from forecasting.models import EventDetectionResult, TimeSeriesPoint
 from forecasting.utils import median_absolute_deviation, pairwise_differences
 
 
+# Recent-event decision
+# - Purpose: decides whether the tail of the current history window should be
+#   treated as an operational disturbance.
+# - Project role: decision stage between telemetry preparation and forecast
+#   scenario selection.
+# - Inputs: the full 3-hour resampled window plus threshold configuration.
+# - Outputs: ``EventDetectionResult`` with event flag, label, thresholds, and
+#   the relevant segment boundaries.
+# - Important decisions: compares robust 5-minute changes, restricts attention
+#   to the most recent portion of the window, and uses dew-point behaviour as a
+#   cross-check for humidity-led events.
+# - Related flow: used by ``build_baseline_window`` and
+#   ``build_event_persist_forecast``.
+# Function purpose: Detect whether the most recent part of the window contains a
+#   disturbance.
+# - Project role: Belongs to the forecast model and evaluation layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as window, config, interpreted according to the
+#   implementation below.
+# - Outputs: Returns EventDetectionResult when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
+
 def detect_recent_event(
     window: list[TimeSeriesPoint],
     *,
     config: ForecastConfig,
 ) -> EventDetectionResult:
-    """Detect whether the most recent part of the window contains a disturbance.
-
-    Inputs:
-    - the full 3-hour resampled telemetry window
-    - configuration values that define robust thresholds and recent-event rules
-
-    Output:
-    - an ``EventDetectionResult`` describing whether the recent behaviour looks
-      event-like and, if so, what kind of event signature it most resembles
-
-    In viva terms, this is the point where the prototype decides whether to
-    trust the recent history as a normal storage baseline or to treat the tail
-    of the window as a disturbance.
-    """
+    """Detect whether the most recent part of the window contains a disturbance."""
     if len(window) < config.event_delta_minutes + config.event_consecutive_points + 1:
         return EventDetectionResult(
             event_detected=False,
@@ -51,9 +79,9 @@ def detect_recent_event(
     rhs = [point.rh_pct for point in window]
     dews = [point.dew_point_c for point in window]
 
-    # We compare readings separated by a fixed 5-minute gap because warehouse
-    # disturbances are easier to interpret as short-window changes than as
-    # minute-to-minute noise.
+    # Change extraction
+    # Fixed 5-minute deltas suppress minute-to-minute noise and make the recent
+    # disturbance signal easier to interpret in operational terms.
     temp_deltas = pairwise_differences(temps, config.event_delta_minutes)
     rh_deltas = pairwise_differences(rhs, config.event_delta_minutes)
     temp_threshold = _robust_threshold(
@@ -69,16 +97,17 @@ def detect_recent_event(
         minimum=config.min_rh_threshold_pct_5m,
     )
 
-    # "Breach" flags mark where the observed 5-minute changes are unusually
-    # large relative to the recent baseline behaviour.
+    # Threshold application
+    # Breach flags mark points where recent change magnitudes sit outside the
+    # robust baseline envelope derived from the same window.
     temp_breaches = [abs(value) > temp_threshold for value in temp_deltas]
     rh_breaches = [abs(value) > rh_threshold for value in rh_deltas]
     hard_temp_breaches = [abs(value) > config.hard_temp_jump_c_5m for value in temp_deltas]
     hard_rh_breaches = [abs(value) > config.hard_rh_jump_pct_5m for value in rh_deltas]
 
-    # The system only cares about disturbances near "now". Older disturbances
-    # are part of the historical context, not part of the current operating
-    # state that should trigger an alternate scenario.
+    # Recent-tail focus
+    # Older disturbances remain part of the historical context, but only the
+    # latest segment should influence the current forecast mode decision.
     recent_start = max(0, len(temp_deltas) - config.event_recent_minutes)
     candidate = _latest_breach_segment(
         temp_breaches=temp_breaches,
@@ -106,10 +135,9 @@ def detect_recent_event(
     temp_delta = temp_deltas[segment_end_delta]
     rh_delta = rh_deltas[segment_end_delta]
     dew_reference_index = max(0, end_point_index - 15)
-    # Dew-point change is used as a physically meaningful cross-check. For
-    # example, a humidity-driven disturbance is more believable when dew point
-    # also rises rather than when RH changes alone are caused only by
-    # temperature.
+    # Physical consistency check
+    # Dew-point rise distinguishes genuine moisture-led changes from RH swings
+    # caused mainly by temperature movement alone.
     dew_rise = dews[end_point_index] - dews[dew_reference_index]
 
     event_type = _event_type(
@@ -140,13 +168,26 @@ def detect_recent_event(
     )
 
 
-def _robust_threshold(values: list[float], *, multiplier: float, scale: float, minimum: float) -> float:
-    """Build a robust change threshold from the recent distribution of deltas.
+# Robust threshold builder
+# - Purpose: derives a disturbance threshold from the local distribution of
+#   recent deltas.
+# - Design reason: median absolute deviation is used so one already-large event
+#   does not inflate the threshold enough to hide the next one.
+# Function purpose: Build a robust change threshold from the recent distribution of
+#   deltas.
+# - Project role: Belongs to the forecast model and evaluation layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as values, multiplier, scale, minimum, interpreted
+#   according to the implementation below.
+# - Outputs: Returns float when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
 
-    The threshold is based on median absolute deviation rather than variance so
-    one or two strong disturbances do not completely dominate the threshold used
-    to detect the next one.
-    """
+def _robust_threshold(values: list[float], *, multiplier: float, scale: float, minimum: float) -> float:
+    """Build a robust change threshold from the recent distribution of deltas."""
     if not values:
         return minimum
     center = median(values)
@@ -158,6 +199,27 @@ def _robust_threshold(values: list[float], *, multiplier: float, scale: float, m
     return max(minimum, dispersion)
 
 
+# Recent breach segmentation
+# - Purpose: finds the latest contiguous stretch of disturbance evidence.
+# - Project role: translates point-wise threshold breaches into one actionable
+#   recent segment for downstream filtering and alternate-scenario decisions.
+# - Important decisions: hard breaches can trigger an immediate one-point event;
+#   softer breaches require a configured consecutive run length.
+# Function purpose: Return the most recent consecutive breach segment, if one
+#   exists.
+# - Project role: Belongs to the forecast model and evaluation layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as temp_breaches, rh_breaches, hard_temp_breaches,
+#   hard_rh_breaches, recent_start, consecutive_points, interpreted according to the
+#   implementation below.
+# - Outputs: Returns tuple[int, int, int] | None when the function completes
+#   successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
+
 def _latest_breach_segment(
     *,
     temp_breaches: list[bool],
@@ -167,12 +229,7 @@ def _latest_breach_segment(
     recent_start: int,
     consecutive_points: int,
 ) -> tuple[int, int, int] | None:
-    """Return the most recent consecutive breach segment, if one exists.
-
-    The forecast runner only needs the latest event-like section, because that
-    is the part of the window that influences whether an event-persist scenario
-    should be generated right now.
-    """
+    """Return the most recent consecutive breach segment, if one exists."""
     latest: tuple[int, int, int] | None = None
     current_start: int | None = None
     current_length = 0
@@ -197,6 +254,25 @@ def _latest_breach_segment(
     return latest
 
 
+# Event labelling
+# - Purpose: converts thresholded change evidence into a compact operational
+#   label.
+# - Outputs: ``door_open_like``, ``ventilation_issue_like``, or ``unknown``.
+# - Important assumption: labels describe the observed pattern, not a proven
+#   physical cause.
+# Function purpose: Translate raw change magnitudes into a simple project-facing
+#   event label.
+# - Project role: Belongs to the forecast model and evaluation layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as temp_delta, temp_threshold, rh_delta, rh_threshold,
+#   dew_rise, config, interpreted according to the implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
+
 def _event_type(
     *,
     temp_delta: float,
@@ -206,12 +282,7 @@ def _event_type(
     dew_rise: float,
     config: ForecastConfig,
 ) -> str:
-    """Translate raw change magnitudes into a simple project-facing event label.
-
-    The labels here are intentionally lightweight. They are not claiming to
-    identify the real physical cause with certainty; they are providing a
-    human-readable explanation for the dashboard and for viva discussion.
-    """
+    """Translate raw change magnitudes into a simple project-facing event label."""
     temp_ratio = abs(temp_delta) / max(temp_threshold, 1e-6)
     rh_ratio = abs(rh_delta) / max(rh_threshold, 1e-6)
     rh_absolute_dominance = abs(rh_delta) >= config.hard_rh_jump_pct_5m and abs(rh_delta) >= max(3.0 * abs(temp_delta), 3.0)

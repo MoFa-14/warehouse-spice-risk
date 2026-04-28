@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for prediction service behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import sys
@@ -19,9 +28,28 @@ from app.services.prediction_service import (
     _rmse_advantage_series,
     _scenario_view,
 )
-
+# Class purpose: Groups related regression checks for PredictionService behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class PredictionServiceTests(unittest.TestCase):
+    # Test purpose: Verifies that RMSE advantage series compares against
+    #   persistence per window behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_rmse_advantage_series_compares_against_persistence_per_window(self) -> None:
         model_rmse = pd.Series([0.40, 0.20], dtype="float64")
         persistence_rmse = pd.Series([0.60, 0.25], dtype="float64")
@@ -29,6 +57,17 @@ class PredictionServiceTests(unittest.TestCase):
         advantage = _rmse_advantage_series(model_rmse=model_rmse, persistence_rmse=persistence_rmse)
 
         self.assertEqual(list(advantage.round(3)), [0.2, 0.05])
+    # Test purpose: Verifies that RMSE advantage series stays stable when
+    #   persistence RMSE is tiny behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_rmse_advantage_series_stays_stable_when_persistence_rmse_is_tiny(self) -> None:
         model_rmse = pd.Series([0.12], dtype="float64")
@@ -37,6 +76,17 @@ class PredictionServiceTests(unittest.TestCase):
         advantage = _rmse_advantage_series(model_rmse=model_rmse, persistence_rmse=persistence_rmse)
 
         self.assertAlmostEqual(float(advantage.iloc[0]), -0.119, places=6)
+    # Test purpose: Verifies that persistence comparison chart uses updated
+    #   title labels and legend behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_persistence_comparison_chart_uses_updated_title_labels_and_legend(self) -> None:
         evaluation_history = pd.DataFrame(
@@ -66,6 +116,17 @@ class PredictionServiceTests(unittest.TestCase):
         self.assertIn("RH vs persistence", chart_html)
         self.assertNotIn("Forecast accuracy improvement over time", chart_html)
         self.assertNotIn("Improvement vs earliest RMSE (%)", chart_html)
+    # Test purpose: Verifies that persistence comparison chart ignores rows
+    #   without completed baseline comparison behaves as expected under this
+    #   regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_persistence_comparison_chart_ignores_rows_without_completed_baseline_comparison(self) -> None:
         evaluation_history = pd.DataFrame(
@@ -90,6 +151,16 @@ class PredictionServiceTests(unittest.TestCase):
         assert chart_html is not None
         self.assertIn("2026-03-28", chart_html)
         self.assertNotIn("2026-03-29", chart_html)
+    # Test purpose: Verifies that scenario view builds user friendly summary
+    #   copy behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_scenario_view_builds_user_friendly_summary_copy(self) -> None:
         row = pd.Series(
@@ -124,6 +195,16 @@ class PredictionServiceTests(unittest.TestCase):
         self.assertIn("If the current door open like pattern persists", scenario.summary_headline)
         self.assertTrue(any("Worst forecast condition reaches" in line for line in scenario.summary_lines))
         self.assertTrue(any("Forecast source: event persist slope" in line for line in scenario.summary_lines))
+    # Test purpose: Verifies that build forecast chart supports dew point metric
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_build_forecast_chart_supports_dew_point_metric(self) -> None:
         baseline_row = pd.Series(
@@ -162,6 +243,16 @@ class PredictionServiceTests(unittest.TestCase):
 
         self.assertIn("30-minute dew point forecast", chart_html)
         self.assertIn("Dew Point (C)", chart_html)
+    # Test purpose: Verifies that metric summary cards are built per plot with
+    #   event variant behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_metric_summary_cards_are_built_per_plot_with_event_variant(self) -> None:
         baseline_row = pd.Series(
@@ -229,6 +320,17 @@ class PredictionServiceTests(unittest.TestCase):
         self.assertIn("If the current door open like pattern persists", cards[1].headline)
         self.assertEqual(cards[0].current_value, "15.00 C")
         self.assertTrue(cards[1].peak_value.endswith("at +3 min"))
+    # Test purpose: Verifies that event persist can be reconstructed from recent
+    #   history when storage row is missing behaves as expected under this
+    #   regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PredictionServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_event_persist_can_be_reconstructed_from_recent_history_when_storage_row_is_missing(self) -> None:
         baseline_row = pd.Series(

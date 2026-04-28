@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for data path behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import csv
@@ -15,9 +24,27 @@ if str(DASHBOARD_ROOT) not in sys.path:
 from app.data_access.csv_reader import read_link_quality, read_raw_samples
 from app.services.link_service import build_health_context
 from app.services.pod_service import discover_dashboard_pods, get_latest_pod_reading
-
+# Class purpose: Groups related regression checks for DashboardDataPath behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class DashboardDataPathTests(unittest.TestCase):
+    # Test purpose: Verifies that raw reader preserves leading zero pod ids and
+    #   append order behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardDataPathTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_raw_reader_preserves_leading_zero_pod_ids_and_append_order(self) -> None:
         with TemporaryDirectory() as temp_dir:
             csv_path = Path(temp_dir) / "raw.csv"
@@ -31,6 +58,16 @@ class DashboardDataPathTests(unittest.TestCase):
 
             self.assertEqual(frame.iloc[0]["pod_id"], "01")
             self.assertEqual(frame.iloc[-1]["seq"], 2)
+    # Test purpose: Verifies that latest reading uses newest sample even when it
+    #   is incomplete behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardDataPathTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_latest_reading_uses_newest_sample_even_when_it_is_incomplete(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -53,6 +90,16 @@ class DashboardDataPathTests(unittest.TestCase):
             self.assertIsNone(reading.temp_c)
             self.assertIsNone(reading.rh_pct)
             self.assertEqual(reading.last_complete_ts_pc_utc.isoformat().replace("+00:00", "Z"), "2026-03-25T19:26:15Z")
+    # Test purpose: Verifies that health context matches link rows for zero
+    #   padded pod ids behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardDataPathTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_health_context_matches_link_rows_for_zero_padded_pod_ids(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -81,6 +128,16 @@ class DashboardDataPathTests(unittest.TestCase):
             self.assertEqual(len(health["rows"]), 1)
             self.assertEqual(health["rows"][0].pod_id, "01")
             self.assertEqual(health["rows"][0].total_received, 12.0)
+    # Test purpose: Verifies that latest reading prefers SQLite live data over
+    #   stale CSV behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardDataPathTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_latest_reading_prefers_sqlite_live_data_over_stale_csv(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -113,6 +170,16 @@ class DashboardDataPathTests(unittest.TestCase):
             self.assertIsNotNone(reading)
             self.assertEqual(reading.ts_pc_utc.isoformat().replace("+00:00", "Z"), "2026-03-25T20:00:00Z")
             self.assertAlmostEqual(reading.temp_c, 24.86)
+    # Test purpose: Verifies that health context prefers SQLite link data
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardDataPathTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_health_context_prefers_sqlite_link_data(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -157,6 +224,16 @@ class DashboardDataPathTests(unittest.TestCase):
             self.assertEqual(health["rows"][0].pod_id, "01")
             self.assertEqual(health["rows"][0].total_received, 31.0)
             self.assertEqual(health["rows"][0].last_rssi, -39.0)
+    # Test purpose: Verifies that dashboard pod discovery keeps stored SQLite
+    #   only pods visible behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardDataPathTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_dashboard_pod_discovery_keeps_stored_sqlite_only_pods_visible(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -216,6 +293,18 @@ class DashboardDataPathTests(unittest.TestCase):
                 connection.commit()
 
             self.assertEqual(discover_dashboard_pods(data_root, db_path=db_path), ["01", "08", "10", "12"])
+    # Method purpose: Creates dashboard SQLite in the form expected by later
+    #   code.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DashboardDataPathTests.
+    # - Inputs: Arguments such as db_path, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     @staticmethod
     def _create_dashboard_sqlite(db_path: Path) -> None:

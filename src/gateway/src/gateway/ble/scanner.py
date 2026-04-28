@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: BLE discovery helpers for pod scanning and RSSI refreshes.
+# - Project role: Handles BLE discovery, connection, and GATT interaction for the
+#   physical pod path.
+# - Main data or concerns: BLE addresses, characteristics, notifications, and
+#   connection state.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
+# - Why this matters: The physical pod path depends on this layer to convert radio
+#   interaction into usable gateway events.
+
 """BLE discovery helpers for pod scanning and RSSI refreshes."""
 
 from __future__ import annotations
@@ -9,7 +20,15 @@ from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
 from gateway.config import normalize_address
-
+# Class purpose: Single discovered pod candidate.
+# - Project role: Belongs to the gateway BLE transport layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The physical pod path depends on this layer to convert
+#   radio interaction into usable gateway events.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
 
 @dataclass(frozen=True)
 class ScanMatch:
@@ -20,7 +39,16 @@ class ScanMatch:
     rssi: int | None
     service_uuids: tuple[str, ...]
     ble_device: BLEDevice
-
+# Function purpose: Implements the matches candidate step used by this subsystem.
+# - Project role: Belongs to the gateway BLE transport layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as device, advertisement, addresses, name_prefix,
+#   service_uuid, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: The physical pod path depends on this layer to convert
+#   radio interaction into usable gateway events.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
 
 def _matches_candidate(
     device: BLEDevice,
@@ -37,7 +65,17 @@ def _matches_candidate(
     local_name = (advertisement.local_name or device.name or "").strip()
     advertised_services = {uuid.lower() for uuid in (advertisement.service_uuids or [])}
     return local_name.startswith(name_prefix) or service_uuid in advertised_services
-
+# Function purpose: Scan for pods that match the configured prefix or explicit
+#   addresses.
+# - Project role: Belongs to the gateway BLE transport layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as timeout, name_prefix, service_uuid, addresses,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns list[ScanMatch] when the function completes successfully.
+# - Important decisions: The physical pod path depends on this layer to convert
+#   radio interaction into usable gateway events.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
 
 async def discover_matches(
     *,
@@ -75,7 +113,17 @@ async def discover_matches(
             matches[address] = match
 
     return sorted(matches.values(), key=lambda item: item.address)
-
+# Function purpose: Resolve a single pod by address, falling back to a direct
+#   lookup.
+# - Project role: Belongs to the gateway BLE transport layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as timeout, name_prefix, service_uuid, address,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns ScanMatch | None when the function completes successfully.
+# - Important decisions: The physical pod path depends on this layer to convert
+#   radio interaction into usable gateway events.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
 
 async def resolve_device(
     *,

@@ -1,4 +1,13 @@
 """Telemetry validation rules used immediately after decoding.
+# File overview:
+# - Responsibility: Telemetry validation rules used immediately after decoding.
+# - Project role: Decodes transport payloads and enforces schema-level telemetry
+#   rules.
+# - Main data or concerns: JSON fragments, NDJSON lines, decoded telemetry fields,
+#   and validation results.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
+
 
 Decoding answers the question "can this payload be parsed?". Validation answers
 the next question: "does this parsed telemetry look trustworthy enough to store
@@ -15,14 +24,31 @@ from dataclasses import dataclass
 
 from gateway.firmware_config_loader import FirmwareConfig
 from gateway.protocol.decoder import TelemetryRecord
-
+# Class purpose: Validation output stored alongside a decoded sample.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   groups related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Protocol rules are foundational because storage and
+#   forecasting assume the payload contract is already normalized.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 @dataclass(frozen=True)
 class ValidationResult:
     """Validation output stored alongside a decoded sample."""
 
     quality_flags: tuple[str, ...]
-
+# Function purpose: Convert decoded telemetry into a set of quality flags.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as record, temp_min_c, temp_max_c, firmware, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns ValidationResult when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 def validate_telemetry(
     record: TelemetryRecord,
@@ -64,7 +90,17 @@ def validate_telemetry(
         quality_flags.append("low_batt")
 
     return ValidationResult(quality_flags=tuple(dict.fromkeys(quality_flags)))
-
+# Function purpose: Render quality flags into the storage-friendly pipe-delimited
+#   form.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as flags, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Protocol rules are foundational because storage and
+#   forecasting assume the payload contract is already normalized.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 def format_quality_flags(flags: tuple[str, ...] | list[str]) -> str:
     """Render quality flags into the storage-friendly pipe-delimited form."""

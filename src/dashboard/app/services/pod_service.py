@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Services that build the dashboard's notion of "latest pod
+#   state".
+# - Project role: Builds route-ready view models, chart inputs, and interpretive
+#   summaries from loaded data.
+# - Main data or concerns: View models, chart series, classifications, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
+# - Why this matters: Keeping presentation logic here prevents routes and templates
+#   from reimplementing analysis rules.
+
 """Services that build the dashboard's notion of "latest pod state".
 
 The dashboard overview and pod-detail pages need one concise, consistent answer
@@ -19,7 +31,15 @@ from app.data_access.file_finder import discover_pod_ids, find_processed_pod_fil
 from app.data_access.sqlite_reader import read_raw_samples_sqlite, sqlite_db_exists
 from app.services.telemetry_adjustments import apply_calibration, load_adjustments
 from app.services.thresholds import ClassificationResult, classify_storage_conditions
-
+# Class purpose: Latest dashboard-ready reading for one pod.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class PodLatestReading:
@@ -34,7 +54,16 @@ class PodLatestReading:
     status: ClassificationResult | None
     has_measurement: bool
     last_complete_ts_pc_utc: datetime | None
-
+# Class purpose: Encapsulates the ReadingCandidate responsibilities used by this
+#   module.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class _ReadingCandidate:
@@ -44,16 +73,45 @@ class _ReadingCandidate:
     rh_pct: float | None
     dew_point_c: float | None
     data_source: str
+    # Method purpose: Implements the has measurement step used by this
+    #   subsystem.
+    # - Project role: Belongs to the dashboard service and presentation layer
+    #   and acts as a method on _ReadingCandidate.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: Keeping presentation logic here prevents routes and
+    #   templates from reimplementing analysis rules.
+    # - Related flow: Consumes dashboard data-access outputs and passes rendered
+    #   context to routes and templates.
 
     @property
     def has_measurement(self) -> bool:
         return any(value is not None for value in (self.temp_c, self.rh_pct, self.dew_point_c))
-
+# Function purpose: Expose consistent pod discovery for routes and navigation.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns list[str] when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def discover_dashboard_pods(data_root: Path, *, db_path: Path | None = None) -> list[str]:
     """Expose consistent pod discovery for routes and navigation."""
     return discover_pod_ids(Path(data_root), db_path=db_path)
-
+# Function purpose: Build the latest-reading card set for all known pods.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, adjustments_path, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[PodLatestReading] when the function completes
+#   successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def get_latest_pod_readings(
     data_root: Path,
@@ -70,7 +128,17 @@ def get_latest_pod_readings(
             readings.append(reading)
     readings.sort(key=lambda item: item.pod_id)
     return readings
-
+# Function purpose: Return the preferred current reading for one pod.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, db_path, adjustments_path,
+#   adjustments, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns PodLatestReading | None when the function completes
+#   successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def get_latest_pod_reading(
     data_root: Path,
@@ -122,7 +190,17 @@ def get_latest_pod_reading(
         has_measurement=current.has_measurement,
         last_complete_ts_pc_utc=None if last_complete is None else last_complete.ts_pc_utc,
     )
-
+# Function purpose: Retrieves the latest processed row available to the caller.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _latest_processed_row(frame: pd.DataFrame):
     if frame.empty:
@@ -138,13 +216,34 @@ def _latest_processed_row(frame: pd.DataFrame):
     if candidate.empty:
         return None
     return candidate.iloc[-1]
-
+# Function purpose: Retrieves the latest row available to the caller.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _latest_row(frame: pd.DataFrame):
     if frame.empty:
         return None
     return frame.iloc[-1]
-
+# Function purpose: Return the newest candidate that still has at least one real
+#   measurement.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, processed_frame, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns _ReadingCandidate | None when the function completes
+#   successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _latest_complete_candidate(raw_frame: pd.DataFrame, processed_frame: pd.DataFrame) -> _ReadingCandidate | None:
     """Return the newest candidate that still has at least one real measurement."""
@@ -159,7 +258,17 @@ def _latest_complete_candidate(raw_frame: pd.DataFrame, processed_frame: pd.Data
     if not candidates:
         return None
     return max(candidates, key=lambda item: (item.ts_pc_utc, item.data_source == "processed"))
-
+# Function purpose: Retrieves the latest measurement row available to the caller.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _latest_measurement_row(frame: pd.DataFrame):
     if frame.empty:
@@ -172,7 +281,18 @@ def _latest_measurement_row(frame: pd.DataFrame):
     if candidate.empty:
         return None
     return candidate.iloc[-1]
-
+# Function purpose: Load recent raw telemetry from SQLite when possible, else CSV
+#   fallback.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, db_path, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _load_raw_frame(data_root: Path, pod_id: str, *, db_path: Path | None = None) -> pd.DataFrame:
     """Load recent raw telemetry from SQLite when possible, else CSV fallback."""
@@ -180,19 +300,49 @@ def _load_raw_frame(data_root: Path, pod_id: str, *, db_path: Path | None = None
         return read_raw_samples_sqlite(db_path, pod_id=pod_id)
     raw_files = find_raw_pod_files(Path(data_root), pod_id)
     return read_raw_samples(raw_files[-3:]) if raw_files else pd.DataFrame()
-
+# Function purpose: Implements the adjust raw frame step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, adjustments, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _adjust_raw_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
     if frame.empty:
         return frame
     return apply_calibration(frame, temp_column="temp_c", rh_column="rh_pct", adjustments=adjustments)
-
+# Function purpose: Implements the adjust processed frame step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, adjustments, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _adjust_processed_frame(frame: pd.DataFrame, adjustments) -> pd.DataFrame:
     if frame.empty:
         return frame
     return apply_calibration(frame, temp_column="temp_c_clean", rh_column="rh_pct_clean", adjustments=adjustments)
-
+# Function purpose: Implements the candidate from raw row step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as row, interpreted according to the rules encoded in the
+#   body below.
+# - Outputs: Returns _ReadingCandidate | None when the function completes
+#   successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _candidate_from_raw_row(row) -> _ReadingCandidate | None:
     if row is None:
@@ -205,7 +355,18 @@ def _candidate_from_raw_row(row) -> _ReadingCandidate | None:
         dew_point_c=_optional_float(row.get("dew_point_c")),
         data_source="raw",
     )
-
+# Function purpose: Implements the candidate from processed row step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as row, interpreted according to the rules encoded in the
+#   body below.
+# - Outputs: Returns _ReadingCandidate | None when the function completes
+#   successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _candidate_from_processed_row(row) -> _ReadingCandidate | None:
     if row is None:
@@ -218,7 +379,16 @@ def _candidate_from_processed_row(row) -> _ReadingCandidate | None:
         dew_point_c=_optional_float(row.get("dew_point_c")),
         data_source="processed",
     )
-
+# Function purpose: Implements the optional float step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _optional_float(value) -> float | None:
     if pd.isna(value):

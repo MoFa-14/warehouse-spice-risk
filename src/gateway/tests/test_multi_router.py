@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for multi router behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import asyncio
@@ -16,57 +25,234 @@ from gateway.control.resend import ResendController
 from gateway.firmware_config_loader import default_firmware_config_path, load_firmware_config
 from gateway.multi.record import TelemetryRecord
 from gateway.multi.router import PodRouter, PodStats
-
+# Class purpose: Encapsulates the DuplicateThenAdvanceWriter responsibilities used
+#   by this module.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class _DuplicateThenAdvanceWriter:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _DuplicateThenAdvanceWriter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
+
     def __init__(self) -> None:
         self.records: list[int] = []
+    # Method purpose: Writes record into the configured destination.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _DuplicateThenAdvanceWriter.
+    # - Inputs: Arguments such as record, quality_flags, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: Returns object when the function completes successfully.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def write_record(self, record: TelemetryRecord, *, quality_flags) -> object:
         self.records.append(record.seq)
         if record.seq == 1:
             return type("Result", (), {"inserted": True, "duplicate": False})()
         return type("Result", (), {"inserted": False, "duplicate": True})()
+    # Method purpose: Writes link snapshot into the configured destination.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _DuplicateThenAdvanceWriter.
+    # - Inputs: Arguments such as snapshot, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def write_link_snapshot(self, snapshot) -> None:
         return None
+    # Method purpose: Implements the close step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _DuplicateThenAdvanceWriter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def close(self) -> None:
         return None
-
+# Class purpose: Encapsulates the RecordingResendController responsibilities used by
+#   this module.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class _RecordingResendController:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingResendController.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
+
     def __init__(self) -> None:
         self.seq_requests: list[tuple[str, int]] = []
         self.from_seq_requests: list[tuple[str, int]] = []
+    # Method purpose: Implements the request seq step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingResendController.
+    # - Inputs: Arguments such as pod_id, seq, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     async def request_seq(self, pod_id: str, seq: int) -> None:
         self.seq_requests.append((pod_id, seq))
+    # Method purpose: Implements the request from seq step used by this
+    #   subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingResendController.
+    # - Inputs: Arguments such as pod_id, from_seq, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     async def request_from_seq(self, pod_id: str, from_seq: int) -> None:
         self.from_seq_requests.append((pod_id, from_seq))
-
+# Class purpose: Encapsulates the RecordingSqliteLikeWriter responsibilities used by
+#   this module.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class _RecordingSqliteLikeWriter:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingSqliteLikeWriter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
+
     def __init__(self) -> None:
         self.records: list[tuple[int, tuple[str, ...]]] = []
         self.events: list[tuple[str, str, str]] = []
+    # Method purpose: Writes record into the configured destination.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingSqliteLikeWriter.
+    # - Inputs: Arguments such as record, quality_flags, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: Returns object when the function completes successfully.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def write_record(self, record: TelemetryRecord, *, quality_flags) -> object:
         self.records.append((record.seq, tuple(quality_flags)))
         return type("Result", (), {"inserted": True, "duplicate": False})()
+    # Method purpose: Writes link snapshot into the configured destination.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingSqliteLikeWriter.
+    # - Inputs: Arguments such as _snapshot, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def write_link_snapshot(self, _snapshot) -> None:
         return None
+    # Method purpose: Implements the log event step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingSqliteLikeWriter.
+    # - Inputs: Arguments such as ts_pc_utc, level, pod_id, message, interpreted
+    #   according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def log_event(self, *, ts_pc_utc: str, level: str, pod_id: str | None = None, message: str) -> None:
         self.events.append((level, str(pod_id or ""), message))
+    # Method purpose: Implements the close step used by this subsystem.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on _RecordingSqliteLikeWriter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     def close(self) -> None:
         return None
-
+# Class purpose: Groups related regression checks for MultiRouter behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
+    # Test purpose: Verifies that router writes per pod files and requests
+    #   resend on gap behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on MultiRouterTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     async def test_router_writes_per_pod_files_and_requests_resend_on_gap(self) -> None:
         with TemporaryDirectory() as temp_dir:
             queue: asyncio.Queue[TelemetryRecord] = asyncio.Queue()
@@ -154,6 +340,16 @@ class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual({row["pod_id"] for row in legacy_rows}, {"01", "02"})
             self.assertEqual(controller.from_seq_requests, [("02", 2)])
             self.assertEqual({snapshot.pod_id for snapshot in snapshots}, {"01", "02"})
+    # Test purpose: Verifies that router throttles repeat resend requests after
+    #   duplicate progress behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on MultiRouterTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     async def test_router_throttles_repeat_resend_requests_after_duplicate_progress(self) -> None:
         queue: asyncio.Queue[TelemetryRecord] = asyncio.Queue()
@@ -215,6 +411,16 @@ class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
         await router.stop()
 
         self.assertEqual(controller.from_seq_requests, [("02", 2)])
+    # Test purpose: Verifies that router detects soft reload sequence drop with
+    #   higher uptime behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on MultiRouterTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     async def test_router_detects_soft_reload_sequence_drop_with_higher_uptime(self) -> None:
         stats = PodStats(
@@ -236,6 +442,17 @@ class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(PodRouter._should_reset_sequence(stats, record))
+    # Test purpose: Verifies that router detects small sequence restart when
+    #   uptime keeps advancing behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on MultiRouterTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     async def test_router_detects_small_sequence_restart_when_uptime_keeps_advancing(self) -> None:
         stats = PodStats(
@@ -257,6 +474,16 @@ class MultiRouterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertTrue(PodRouter._should_reset_sequence(stats, record))
+    # Test purpose: Verifies that router flags time sync anomaly and logs
+    #   gateway events behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on MultiRouterTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     async def test_router_flags_time_sync_anomaly_and_logs_gateway_events(self) -> None:
         queue: asyncio.Queue[TelemetryRecord] = asyncio.Queue()

@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Synthetic pod simulator that connects to the gateway over TCP
+#   and supports replay.
+# - Project role: Defines executable simulation entry points and supporting
+#   simulation behavior.
+# - Main data or concerns: Simulation configuration, generated telemetry, and
+#   runtime control state.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
+# - Why this matters: Entry scripts matter because they determine how the synthetic
+#   environment is exposed to the rest of the system.
+
 """Synthetic pod simulator that connects to the gateway over TCP and supports replay."""
 
 from __future__ import annotations
@@ -21,7 +32,15 @@ from sim.zone_profiles import get_zone_profile, zone_profile_names
 
 
 LOGGER = logging.getLogger("synthetic_pod")
-
+# Function purpose: Parses start local into structured values.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns datetime | None when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def _parse_start_local(value: str | None) -> datetime | None:
     if value is None:
@@ -32,7 +51,15 @@ def _parse_start_local(value: str | None) -> datetime | None:
         raise argparse.ArgumentTypeError(
             f"Invalid --start-local value {value!r}. Expected an ISO timestamp such as 2026-07-15T09:00:00."
         ) from exc
-
+# Function purpose: Validates timezone before it enters later storage or analysis.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def _validate_timezone(value: str) -> str:
     value = str(value).strip()
@@ -48,7 +75,17 @@ def _validate_timezone(value: str) -> str:
                 f"Unknown timezone {value!r}. Example valid value: Europe/London."
             ) from None
     return value
-
+# Function purpose: Normalizes pod identifier into the subsystem's stable
+#   representation.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def _normalize_pod_id(value: str) -> str:
     text = str(value).strip()
@@ -57,7 +94,15 @@ def _normalize_pod_id(value: str) -> str:
     if text.isdigit():
         return text.zfill(max(2, len(text)))
     return text
-
+# Function purpose: Parses explicit pod ids into structured values.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns list[str] when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def _parse_explicit_pod_ids(value: str) -> list[str]:
     pod_ids = [_normalize_pod_id(part) for part in str(value).split(",") if str(part).strip()]
@@ -68,7 +113,15 @@ def _parse_explicit_pod_ids(value: str) -> list[str]:
         duplicate_list = ", ".join(sorted(duplicates))
         raise ValueError(f"--pod-ids contains duplicate pod ids: {duplicate_list}.")
     return pod_ids
-
+# Function purpose: Resolves pod ids into the concrete value used later.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as args, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns list[str] when the function completes successfully.
+# - Important decisions: Entry scripts matter because they determine how the
+#   synthetic environment is exposed to the rest of the system.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def resolve_pod_ids(args: argparse.Namespace) -> list[str]:
     explicit_ids = str(getattr(args, "pod_ids", "") or "").strip()
@@ -89,7 +142,16 @@ def resolve_pod_ids(args: argparse.Namespace) -> list[str]:
     width = max(2, len(start_text))
     start_value = int(start_text)
     return [f"{start_value + offset:0{width}d}" for offset in range(pod_count)]
-
+# Function purpose: Builds pod args for the next stage of the project flow.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as args, pod_id, index, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def build_pod_args(args: argparse.Namespace, *, pod_id: str, index: int) -> argparse.Namespace:
     seed_base = getattr(args, "seed_base", None)
@@ -98,7 +160,15 @@ def build_pod_args(args: argparse.Namespace, *, pod_id: str, index: int) -> argp
     cloned["pod_id"] = str(pod_id)
     cloned["seed"] = seed
     return SimpleNamespace(**cloned)
-
+# Function purpose: Parses args into structured values.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Synthetic pod simulator for multi-pod gateway tests")
@@ -217,17 +287,47 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     except ValueError as exc:
         parser.error(str(exc))
     return args
-
+# Function purpose: Implements the configure logging step used by this subsystem.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as verbose, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Entry scripts matter because they determine how the
+#   synthetic environment is exposed to the rest of the system.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def configure_logging(verbose: bool) -> None:
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
-
+# Class purpose: Generate telemetry, inject faults, and replay missing samples on
+#   demand.
+# - Project role: Belongs to the synthetic pod runtime layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Entry scripts matter because they determine how the
+#   synthetic environment is exposed to the rest of the system.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 class SyntheticPodClient:
     """Generate telemetry, inject faults, and replay missing samples on demand."""
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: Arguments such as args, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
@@ -279,6 +379,15 @@ class SyntheticPodClient:
         self._stop_event = asyncio.Event()
         self._pending_deliveries: set[asyncio.Task[None]] = set()
         self._writer: asyncio.StreamWriter | None = None
+    # Method purpose: Implements the run step used by this subsystem.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns int when the function completes successfully.
+    # - Important decisions: Entry scripts matter because they determine how the
+    #   synthetic environment is exposed to the rest of the system.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     async def run(self) -> int:
         while not self._stop_event.is_set():
@@ -306,6 +415,15 @@ class SyntheticPodClient:
             else:
                 await asyncio.sleep(1.0)
         return 0
+    # Method purpose: Implements the send loop step used by this subsystem.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: Entry scripts matter because they determine how the
+    #   synthetic environment is exposed to the rest of the system.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     async def _send_loop(self) -> float:
         while not self._stop_event.is_set():
@@ -352,11 +470,34 @@ class SyntheticPodClient:
                 continue
 
         return 0.0
+    # Method purpose: Implements the deliver after delay step used by this
+    #   subsystem.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: Arguments such as sample, action, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Entry scripts matter because they determine how the
+    #   synthetic environment is exposed to the rest of the system.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     async def _deliver_after_delay(self, sample: dict[str, object], action: FaultAction) -> None:
         await asyncio.sleep(action.delay_s)
         LOGGER.info("Delayed seq=%s by %.2fs", sample["seq"], action.delay_s)
         await self._deliver_sample(sample, corrupt=action.corrupt)
+    # Method purpose: Implements the deliver sample step used by this subsystem.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: Arguments such as sample, corrupt, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Entry scripts matter because they determine how the
+    #   synthetic environment is exposed to the rest of the system.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     async def _deliver_sample(self, sample: dict[str, object], *, corrupt: bool) -> None:
         writer = self._writer
@@ -372,6 +513,17 @@ class SyntheticPodClient:
 
         writer.write(payload.encode("utf-8"))
         await writer.drain()
+    # Method purpose: Implements the command loop step used by this subsystem.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: Arguments such as reader, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Entry scripts matter because they determine how the
+    #   synthetic environment is exposed to the rest of the system.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     async def _command_loop(self, reader: asyncio.StreamReader) -> None:
         while not self._stop_event.is_set():
@@ -393,6 +545,16 @@ class SyntheticPodClient:
                     await self._deliver_sample(sample, corrupt=False)
                     replayed += 1
                 LOGGER.info("Replayed %s sample(s) from seq=%s", replayed, from_seq)
+    # Method purpose: Implements the close writer step used by this subsystem.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Entry scripts matter because they determine how the
+    #   synthetic environment is exposed to the rest of the system.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     async def _close_writer(self) -> None:
         for task in list(self._pending_deliveries):
@@ -407,6 +569,17 @@ class SyntheticPodClient:
                 self._writer.close()
                 await self._writer.wait_closed()
         self._writer = None
+    # Method purpose: Implements the corrupt payload step used by this
+    #   subsystem.
+    # - Project role: Belongs to the synthetic pod runtime layer and acts as a
+    #   method on SyntheticPodClient.
+    # - Inputs: Arguments such as sample, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns str when the function completes successfully.
+    # - Important decisions: Entry scripts matter because they determine how the
+    #   synthetic environment is exposed to the rest of the system.
+    # - Related flow: Wraps simulation helpers into runnable synthetic pod
+    #   behavior.
 
     @staticmethod
     def _corrupt_payload(sample: dict[str, object]) -> str:
@@ -418,7 +591,15 @@ class SyntheticPodClient:
         if mode == "garble":
             return good[:-2] + "??\n"
         return good.replace("{", "", 1) + "\n"
-
+# Function purpose: Implements the async main step used by this subsystem.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as args, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Entry scripts matter because they determine how the
+#   synthetic environment is exposed to the rest of the system.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 async def async_main(args: argparse.Namespace) -> int:
     pod_ids = resolve_pod_ids(args)
@@ -444,7 +625,15 @@ async def async_main(args: argparse.Namespace) -> int:
         await asyncio.gather(*tasks, return_exceptions=True)
         raise
     return max(results, default=0)
-
+# Function purpose: Implements the CLI step used by this subsystem.
+# - Project role: Belongs to the synthetic pod runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Entry scripts matter because they determine how the
+#   synthetic environment is exposed to the rest of the system.
+# - Related flow: Wraps simulation helpers into runnable synthetic pod behavior.
 
 def cli(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)

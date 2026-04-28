@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Top-level runtime orchestration for concurrent BLE and TCP
+#   ingestion.
+# - Project role: Normalizes and routes telemetry arriving from multiple pods.
+# - Main data or concerns: Pod identifiers, normalized records, and routing
+#   decisions.
+# - Related flow: Receives transport-specific records and passes per-pod outputs to
+#   storage and diagnostics.
+# - Why this matters: The integrated system depends on this layer to keep multi-pod
+#   handling explicit rather than implicit.
+
 """Top-level runtime orchestration for concurrent BLE and TCP ingestion."""
 
 from __future__ import annotations
@@ -20,7 +31,15 @@ from gateway.utils.timeutils import utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
-
+# Class purpose: Runtime settings for the multi-pod gateway mode.
+# - Project role: Belongs to the multi-pod routing layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The integrated system depends on this layer to keep
+#   multi-pod handling explicit rather than implicit.
+# - Related flow: Receives transport-specific records and passes per-pod outputs to
+#   storage and diagnostics.
 
 @dataclass(frozen=True)
 class MultiGatewaySettings:
@@ -41,19 +60,60 @@ class MultiGatewaySettings:
     rssi_poll_interval_s: float = 30.0
     stats_interval_s: float = 30.0
     use_cached_services: bool = False
+    # Method purpose: Implements the firmware step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on MultiGatewaySettings.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns FirmwareConfig when the function completes
+    #   successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     @property
     def firmware(self) -> FirmwareConfig:
         config_path = Path(self.firmware_config_path) if self.firmware_config_path else default_firmware_config_path()
         return load_firmware_config(config_path)
+    # Method purpose: Implements the resolved database path step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on MultiGatewaySettings.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns Path when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     @property
     def resolved_db_path(self) -> Path:
         return resolve_db_path(self.db_path)
-
+# Class purpose: Run concurrent BLE and TCP ingestion into a shared per-pod router.
+# - Project role: Belongs to the multi-pod routing layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The integrated system depends on this layer to keep
+#   multi-pod handling explicit rather than implicit.
+# - Related flow: Receives transport-specific records and passes per-pod outputs to
+#   storage and diagnostics.
 
 class MultiGatewayOrchestrator:
     """Run concurrent BLE and TCP ingestion into a shared per-pod router."""
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on MultiGatewayOrchestrator.
+    # - Inputs: Arguments such as settings, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def __init__(self, settings: MultiGatewaySettings) -> None:
         self.settings = settings
@@ -97,6 +157,15 @@ class MultiGatewayOrchestrator:
         )
         self._stop_event = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
+    # Method purpose: Implements the run step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on MultiGatewayOrchestrator.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns int when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def run(self) -> int:
         LOGGER.debug(
@@ -148,6 +217,16 @@ class MultiGatewayOrchestrator:
                 self._write_link_snapshots()
             await self.router.stop()
             self.process_lock.release()
+    # Method purpose: Implements the stats loop step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on MultiGatewayOrchestrator.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def _stats_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -173,6 +252,18 @@ class MultiGatewayOrchestrator:
                         "Multi-gateway link snapshot write failed.",
                         exc_info=(type(exc), exc, exc.__traceback__),
                     )
+    # Method purpose: Implements the handle task done step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on MultiGatewayOrchestrator.
+    # - Inputs: Arguments such as task, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _handle_task_done(self, task: asyncio.Task[None]) -> None:
         if task.cancelled():
@@ -185,6 +276,16 @@ class MultiGatewayOrchestrator:
                 exc_info=(type(exc), exc, exc.__traceback__),
             )
             self._stop_event.set()
+    # Method purpose: Writes link snapshots into the configured destination.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on MultiGatewayOrchestrator.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _write_link_snapshots(self) -> None:
         timestamp = utc_now_iso()

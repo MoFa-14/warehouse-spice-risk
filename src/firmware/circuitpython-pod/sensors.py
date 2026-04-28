@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: SHT45 sensor wrapper with retry-friendly error handling.
+# - Project role: Implements device-side sensing, buffering, status tracking, and
+#   BLE behavior on the physical pod.
+# - Main data or concerns: Sensor samples, ring-buffer entries, BLE payloads, status
+#   fields, and timing values.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
+# - Why this matters: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+
 """SHT45 sensor wrapper with retry-friendly error handling.
 
 The rest of the firmware should not need to know about I2C setup, sensor driver
@@ -16,7 +27,15 @@ from config import (
     SENSOR_ERROR_NONE,
     SENSOR_ERROR_READ_FAILED,
 )
-
+# Class purpose: Own the sensor lifecycle and expose fault-tolerant sampling.
+# - Project role: Belongs to the embedded firmware runtime layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 class SHT45Sensor:
     """Own the sensor lifecycle and expose fault-tolerant sampling.
@@ -26,6 +45,18 @@ class SHT45Sensor:
     fails it preserves the packet structure, sets the error flag, and lets the
     rest of the system decide how to treat the missing measurement.
     """
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on SHT45Sensor.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def __init__(self):
         self._i2c = None
@@ -33,6 +64,18 @@ class SHT45Sensor:
         self.serial_number = None
         self.last_error_code = SENSOR_ERROR_NONE
         self._init_sensor(initial_boot=True)
+    # Method purpose: Create or recreate the CircuitPython sensor driver
+    #   instance.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on SHT45Sensor.
+    # - Inputs: Arguments such as initial_boot, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Gateway decoding and storage rely on the firmware
+    #   keeping telemetry semantics consistent.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def _init_sensor(self, initial_boot=False):
         """Create or recreate the CircuitPython sensor driver instance.
@@ -62,6 +105,18 @@ class SHT45Sensor:
             prefix = "Sensor init failure" if initial_boot else "Sensor re-init failure"
             print("{}: {}".format(prefix, exc))
             return False
+    # Method purpose: Return one telemetry-ready reading record.
+    # - Project role: Belongs to the embedded firmware runtime layer and acts as
+    #   a method on SHT45Sensor.
+    # - Inputs: Arguments such as pod_id, seq, ts_uptime_s, interpreted
+    #   according to the rules encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: The transformation rules here define how later code
+    #   interprets the same data, so the shape of the output needs to stay
+    #   stable and reproducible.
+    # - Related flow: Reads sensors and pod state, then exposes telemetry and
+    #   control behavior to the gateway.
 
     def read_sample(self, pod_id, seq, ts_uptime_s):
         """Return one telemetry-ready reading record.

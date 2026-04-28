@@ -1,12 +1,36 @@
-"""Persistence layer for analogue forecasting cases.
+# File overview:
+# - Responsibility: Case-base persistence for the analogue forecasting subsystem.
+# - Project role: Defines feature extraction, case matching, scenario generation,
+#   evaluation, and forecasting utilities.
+# - Main data or concerns: Feature vectors, trajectories, event labels, metrics, and
+#   model configuration.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
 
-The analogue model depends on a historical memory: earlier 3-hour situations
-paired with the 30-minute futures that actually followed them. This file is the
-storage layer for that memory.
+"""Case-base persistence for the analogue forecasting subsystem.
 
-In viva terms, this is the project's case library. The forecaster later asks:
-"Have we seen a similar warehouse situation before, and if so, what happened
-next?"
+Responsibilities:
+- Stores historical 3-hour feature windows together with the 30-minute futures
+  that followed them.
+- Sits between forecast evaluation/learning and later analogue matching.
+- Supports SQLite for the integrated runtime and JSONL for smaller offline or
+  test-oriented runs.
+
+Project flow:
+- completed history window -> feature vector + realised future -> case storage
+- current feature vector -> case retrieval -> neighbour matching -> forecast
+
+Data handled:
+- Forecast anchor timestamp per pod
+- Interpretable feature vectors
+- Future temperature and RH trajectories
+- Event labels used to separate disturbance cases from baseline cases
+
+Downstream dependency:
+- ``gateway.forecast.runner.ForecastRunner`` appends new matured cases and uses
+  the latest stored timestamp to avoid relearning the same windows.
+- ``forecasting.knn_forecaster.AnalogueKNNForecaster`` depends on loaded cases
+  as the historical memory for similarity search.
 """
 
 from __future__ import annotations
@@ -32,12 +56,40 @@ CASE_BASE_TABLE_SQL = """
 """
 
 
-class CaseBaseStore:
-    """Load and append analogue cases in SQLite or JSONL form.
+# Case-base storage adapter
+# - Purpose: persists the analogue memory used by the forecast model.
+# - Project role: forms the storage boundary between learned historical windows
+#   and later neighbour retrieval.
+# - Inputs: storage backend selection plus SQLite or JSONL locations.
+# - Outputs: ``CaseRecord`` collections, append operations, and latest learned
+#   timestamps.
+# - Design reason: the forecasting pipeline should not care whether cases are
+#   stored in the main runtime database or in a lightweight file backend.
+# Class purpose: Load and append analogue cases in SQLite or JSONL form.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
 
-    The project supports both SQLite and JSONL so the same forecasting logic can
-    run in the main integrated system and in smaller offline/test contexts.
-    """
+class CaseBaseStore:
+    """Load and append analogue cases in SQLite or JSONL form."""
+
+    # Method purpose: Handles init for the surrounding project flow.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as storage_backend, sqlite_db_path, jsonl_path,
+    #   interpreted according to the implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
     def __init__(
         self,
@@ -49,6 +101,22 @@ class CaseBaseStore:
         self.storage_backend = storage_backend.strip().lower()
         self.sqlite_db_path = sqlite_db_path
         self.jsonl_path = jsonl_path
+
+    # Storage initialisation
+    # - Purpose: creates the durable structure needed to store learned cases.
+    # - Project role: first persistence step before the runner can append cases.
+    # - Outputs: an existing SQLite table or JSONL file ready for use.
+    # Method purpose: Create the backing storage for the case base if it does
+    #   not exist.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
     def ensure_storage(self) -> None:
         """Create the backing storage for the case base if it does not exist."""
@@ -68,15 +136,52 @@ class CaseBaseStore:
         self.jsonl_path.parent.mkdir(parents=True, exist_ok=True)
         self.jsonl_path.touch(exist_ok=True)
 
-    def load_cases(self, *, pod_id: str, include_event_cases: bool = False) -> list[CaseRecord]:
-        """Load historical cases for one pod.
+    # Case retrieval
+    # - Purpose: returns historical analogue cases for one pod.
+    # - Project role: read path used immediately before neighbour matching.
+    # - Inputs: pod identifier and an optional choice to keep or exclude event
+    #   cases.
+    # - Outputs: ordered ``CaseRecord`` objects ready for distance scoring.
+    # - Important decision: baseline forecasting normally excludes disturbance
+    #   cases so ordinary matching is not dominated by abnormal windows.
+    # Method purpose: Load historical cases for one pod.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as pod_id, include_event_cases, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns list[CaseRecord] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
-        Baseline forecasting typically excludes event-labelled cases so that the
-        normal analogue model is not dominated by disturbance periods.
-        """
+    def load_cases(self, *, pod_id: str, include_event_cases: bool = False) -> list[CaseRecord]:
+        """Load historical cases for one pod."""
         if self.storage_backend == "sqlite":
             return self._load_cases_sqlite(pod_id=pod_id, include_event_cases=include_event_cases)
         return self._load_cases_jsonl(pod_id=pod_id, include_event_cases=include_event_cases)
+
+    # Case learning write path
+    # - Purpose: stores one newly matured historical example.
+    # - Project role: write path used after a forecast window has fully played
+    #   out and can be converted into a reusable analogue case.
+    # - Inputs: one complete ``CaseRecord``.
+    # - Downstream dependency: future baseline forecasts may use the appended
+    #   case as a nearest neighbour.
+    # Method purpose: Append one newly learned case after a forecast window is
+    #   complete.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as case, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
     def append_case(self, case: CaseRecord) -> None:
         """Append one newly learned case after a forecast window is complete."""
@@ -86,15 +191,47 @@ class CaseBaseStore:
             return
         self._append_case_jsonl(case)
 
-    def latest_case_timestamp(self, pod_id: str):
-        """Return the newest stored case timestamp for one pod.
+    # Incremental learning checkpoint
+    # - Purpose: returns the newest learned case timestamp for one pod.
+    # - Project role: prevents the runner from walking over the same historical
+    #   windows every cycle.
+    # - Outputs: the latest known case timestamp or ``None`` when no case has
+    #   been stored yet.
+    # Method purpose: Return the newest stored case timestamp for one pod.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns the value or side effect defined by the implementation.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
-        The runner uses this to avoid relearning the same historical windows on
-        every cycle.
-        """
+    def latest_case_timestamp(self, pod_id: str):
+        """Return the newest stored case timestamp for one pod."""
         if self.storage_backend == "sqlite":
             return self._latest_case_timestamp_sqlite(pod_id)
         return self._latest_case_timestamp_jsonl(pod_id)
+
+    # SQLite read path
+    # - Purpose: reads stored analogue cases from the integrated runtime
+    #   database.
+    # - Important decision: rows are always ordered by forecast timestamp so the
+    #   case history remains chronologically stable across runs.
+    # Method purpose: Loads cases SQLite for the surrounding project flow.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as pod_id, include_event_cases, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns list[CaseRecord] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
     def _load_cases_sqlite(self, *, pod_id: str, include_event_cases: bool) -> list[CaseRecord]:
         if self.sqlite_db_path is None or not self.sqlite_db_path.exists():
@@ -118,6 +255,22 @@ class CaseBaseStore:
 
         cases = [_row_to_case(row) for row in rows]
         return _filter_case_labels(cases, include_event_cases=include_event_cases)
+
+    # SQLite write path
+    # - Purpose: inserts one learned case into the integrated runtime database.
+    # - Important decision: ``INSERT OR IGNORE`` preserves idempotence when the
+    #   runner revisits the same completed window.
+    # Method purpose: Appends case SQLite for the surrounding project flow.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as case, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
     def _append_case_sqlite(self, case: CaseRecord) -> None:
         assert self.sqlite_db_path is not None
@@ -143,6 +296,22 @@ class CaseBaseStore:
         finally:
             connection.close()
 
+    # SQLite checkpoint lookup
+    # - Purpose: reads the most recent stored case timestamp for incremental
+    #   learning.
+    # Method purpose: Retrieves the latest case timestamp SQLite for the calling
+    #   code.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns the value or side effect defined by the implementation.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
+
     def _latest_case_timestamp_sqlite(self, pod_id: str):
         if self.sqlite_db_path is None or not self.sqlite_db_path.exists():
             return None
@@ -163,6 +332,23 @@ class CaseBaseStore:
         if row is None or row[0] is None:
             return None
         return parse_utc(str(row[0]))
+
+    # JSONL read path
+    # - Purpose: mirrors the SQLite case loader for lightweight storage.
+    # - Project role: keeps the forecasting package usable in offline contexts
+    #   that do not depend on the gateway database schema.
+    # Method purpose: Loads cases JSONL for the surrounding project flow.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as pod_id, include_event_cases, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns list[CaseRecord] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
     def _load_cases_jsonl(self, *, pod_id: str, include_event_cases: bool) -> list[CaseRecord]:
         if self.jsonl_path is None or not self.jsonl_path.exists():
@@ -185,6 +371,20 @@ class CaseBaseStore:
                 )
         return _filter_case_labels(cases, include_event_cases=include_event_cases)
 
+    # JSONL write path
+    # - Purpose: appends one learned case to the line-oriented fallback store.
+    # Method purpose: Appends case JSONL for the surrounding project flow.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as case, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
+
     def _append_case_jsonl(self, case: CaseRecord) -> None:
         assert self.jsonl_path is not None
         self.jsonl_path.parent.mkdir(parents=True, exist_ok=True)
@@ -199,6 +399,21 @@ class CaseBaseStore:
         with self.jsonl_path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(payload, separators=(",", ":"), sort_keys=True))
             handle.write("\n")
+
+    # JSONL checkpoint lookup
+    # - Purpose: mirrors the SQLite latest-case lookup for file storage.
+    # Method purpose: Retrieves the latest case timestamp JSONL for the calling
+    #   code.
+    # - Project role: Belongs to the forecast model and evaluation layer and
+    #   acts as a method on CaseBaseStore.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns the value or side effect defined by the implementation.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Consumes forecast-ready telemetry windows and passes
+    #   trajectories or evaluation artefacts to gateway orchestration.
 
     def _latest_case_timestamp_jsonl(self, pod_id: str):
         if self.jsonl_path is None or not self.jsonl_path.exists():
@@ -217,6 +432,23 @@ class CaseBaseStore:
         return latest
 
 
+# Row reconstruction
+# - Purpose: converts one persisted SQLite row back into the in-memory
+#   ``CaseRecord`` shape expected by the forecasting code.
+# - Downstream dependency: called during case loading before event-label
+#   filtering and neighbour selection.
+# Function purpose: Convert a SQLite row back into the in-memory case structure.
+# - Project role: Belongs to the forecast model and evaluation layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as row, interpreted according to the implementation
+#   below.
+# - Outputs: Returns CaseRecord when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
+
 def _row_to_case(row: sqlite3.Row) -> CaseRecord:
     """Convert a SQLite row back into the in-memory case structure."""
     return CaseRecord(
@@ -228,6 +460,24 @@ def _row_to_case(row: sqlite3.Row) -> CaseRecord:
         event_label=str(row["event_label"] or "none"),
     )
 
+
+# Event-label filtering
+# - Purpose: removes disturbance-labelled cases from the default baseline case
+#   pool.
+# - Design reason: baseline analogue matching should reflect ordinary storage
+#   evolution unless an explicit caller requests event cases as well.
+# Function purpose: Optionally exclude disturbance-labelled cases from baseline
+#   matching.
+# - Project role: Belongs to the forecast model and evaluation layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as cases, include_event_cases, interpreted according to
+#   the implementation below.
+# - Outputs: Returns list[CaseRecord] when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or evaluation artefacts to gateway orchestration.
 
 def _filter_case_labels(cases: list[CaseRecord], *, include_event_cases: bool) -> list[CaseRecord]:
     """Optionally exclude disturbance-labelled cases from baseline matching."""

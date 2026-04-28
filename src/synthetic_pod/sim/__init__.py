@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Synthetic pod helpers.
+# - Project role: Generates simulated pod behavior, schedules, faults, and
+#   environmental patterns.
+# - Main data or concerns: Synthetic sensor values, schedules, weather trends, and
+#   simulated disturbances.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
+# - Why this matters: Simulation modules matter because they extend the single
+#   physical pod into a multi-zone experimental system.
+
 """Synthetic pod helpers."""
 
 from .buffer import ReplayBuffer

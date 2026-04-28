@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for CSV import behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import csv
@@ -12,9 +21,27 @@ if str(SRC_DIR) not in sys.path:
 
 from gateway.storage.import_csv import import_csv_history
 from gateway.storage.sqlite_reader import link_quality_in_range, samples_in_range
-
+# Class purpose: Groups related regression checks for CsvImport behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class CsvImportTests(unittest.TestCase):
+    # Test purpose: Verifies that import CSV history copies canonical and legacy
+    #   rows once behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on CsvImportTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_import_csv_history_copies_canonical_and_legacy_rows_once(self) -> None:
         with TemporaryDirectory() as temp_dir:
             repo_root = Path(temp_dir)
@@ -202,7 +229,16 @@ class CsvImportTests(unittest.TestCase):
             self.assertEqual([row["seq"] for row in samples], [1, 2, 3])
             self.assertEqual(len(link_rows), 2)
             self.assertEqual({row["pod_id"] for row in link_rows}, {"01"})
-
+# Function purpose: Writes CSV into the configured destination.
+# - Project role: Belongs to the test and regression coverage and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as path, fieldnames, rows, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 def _write_csv(path: Path, *, fieldnames: list[str], rows: list[dict[str, str]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

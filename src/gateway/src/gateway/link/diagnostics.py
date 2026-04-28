@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: SQLite-backed per-pod diagnostics summaries for link and timing
+#   health.
+# - Project role: Computes communication quality, sequence gaps, and timing
+#   diagnostics.
+# - Main data or concerns: Sequence counters, timestamps, connectivity statistics,
+#   and missing-rate metrics.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
+# - Why this matters: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+
 """SQLite-backed per-pod diagnostics summaries for link and timing health.
 
 Forecast quality depends on more than the model alone. If a pod is reconnecting
@@ -16,7 +28,15 @@ from pathlib import Path
 from gateway.link.time_alignment import AlignmentState, align_sample
 from gateway.storage.sqlite_db import connect_sqlite, resolve_db_path
 from gateway.utils.timeutils import utc_now_iso
-
+# Class purpose: Per-pod diagnostics summary over a chosen UTC window.
+# - Project role: Belongs to the gateway link-diagnostics layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 @dataclass(frozen=True)
 class PodDiagnosticsSummary:
@@ -35,7 +55,18 @@ class PodDiagnosticsSummary:
     drift_anomaly_count: int
     max_abs_drift_s: float
     latest_estimated_sample_time_utc: str | None
-
+# Function purpose: Build a serialisable diagnostics report over a recent time
+#   window.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as db_path, hours, pod_ids, end_utc, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def build_diagnostics_summary(
     *,
@@ -59,7 +90,18 @@ def build_diagnostics_summary(
         "range_end_utc": _to_utc_iso(end),
         "rows": [asdict(item) for item in summaries],
     }
-
+# Function purpose: Return per-pod diagnostics summaries within an explicit UTC
+#   window.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as db_path, start_utc, end_utc, pod_ids, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[PodDiagnosticsSummary] when the function completes
+#   successfully.
+# - Important decisions: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def diagnostics_in_range(
     *,
@@ -97,7 +139,18 @@ def diagnostics_in_range(
         )
         for pod_id in all_pods
     ]
-
+# Function purpose: Aggregate one pod's stored communication evidence into a summary
+#   row.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as pod_id, sample_rows, link_rows, resend_request_count,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns PodDiagnosticsSummary when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def _build_pod_summary(
     *,
@@ -153,7 +206,17 @@ def _build_pod_summary(
         max_abs_drift_s=max_abs_drift,
         latest_estimated_sample_time_utc=latest_estimated_time,
     )
-
+# Function purpose: Implements the sample rows step used by this subsystem.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, start_utc, end_utc, pod_ids, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[dict[str, object]] when the function completes
+#   successfully.
+# - Important decisions: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def _sample_rows(connection, *, start_utc: str, end_utc: str, pod_ids: list[str] | None) -> list[dict[str, object]]:
     query = """
@@ -169,7 +232,17 @@ def _sample_rows(connection, *, start_utc: str, end_utc: str, pod_ids: list[str]
         parameters.extend(str(item) for item in pod_ids)
     query += " ORDER BY pod_id ASC, session_id ASC, ts_pc_utc ASC, seq ASC"
     return [dict(row) for row in connection.execute(query, tuple(parameters)).fetchall()]
-
+# Function purpose: Implements the link rows step used by this subsystem.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, start_utc, end_utc, pod_ids, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[dict[str, object]] when the function completes
+#   successfully.
+# - Important decisions: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def _link_rows(connection, *, start_utc: str, end_utc: str, pod_ids: list[str] | None) -> list[dict[str, object]]:
     try:
@@ -188,7 +261,16 @@ def _link_rows(connection, *, start_utc: str, end_utc: str, pod_ids: list[str] |
         return [dict(row) for row in connection.execute(query, tuple(parameters)).fetchall()]
     except Exception:
         return []
-
+# Function purpose: Implements the resend counts step used by this subsystem.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, start_utc, end_utc, pod_ids, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, int] when the function completes successfully.
+# - Important decisions: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def _resend_counts(connection, *, start_utc: str, end_utc: str, pod_ids: list[str] | None) -> dict[str, int]:
     try:
@@ -209,7 +291,16 @@ def _resend_counts(connection, *, start_utc: str, end_utc: str, pod_ids: list[st
     except Exception:
         return {}
     return {str(row["pod_id"]): int(row["resend_count"]) for row in rows if row["pod_id"] is not None}
-
+# Function purpose: Implements the link deltas step used by this subsystem.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as link_rows, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns tuple[int, int, int] when the function completes successfully.
+# - Important decisions: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def _link_deltas(link_rows: list[dict[str, object]]) -> tuple[int, int, int]:
     if not link_rows:
@@ -227,7 +318,16 @@ def _link_deltas(link_rows: list[dict[str, object]]) -> tuple[int, int, int]:
     duplicates = max(int(last.get("total_duplicates") or 0) - int(first.get("total_duplicates") or 0), 0)
     reconnects = max(int(last.get("reconnect_count") or 0) - int(first.get("reconnect_count") or 0), 0)
     return missing, duplicates, reconnects
-
+# Function purpose: Implements the to UTC iso step used by this subsystem.
+# - Project role: Belongs to the gateway link-diagnostics layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Link-quality interpretation matters because missing data
+#   changes how later telemetry should be trusted.
+# - Related flow: Consumes received telemetry and passes quality summaries to
+#   storage and dashboard views.
 
 def _to_utc_iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")

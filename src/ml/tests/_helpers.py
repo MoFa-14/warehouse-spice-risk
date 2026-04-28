@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for helpers behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import csv
@@ -12,7 +21,15 @@ if str(ML_SRC) not in sys.path:
 
 from forecasting.dewpoint import calculate_dew_point_c
 from forecasting.models import TimeSeriesPoint
-
+# Function purpose: Implements the synthetic window step used by this subsystem.
+# - Project role: Belongs to the test and regression coverage and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as length, start, temp_base, rh_base, temp_rate_per_min,
+#   rh_rate_per_min, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns list[TimeSeriesPoint] when the function completes successfully.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 def synthetic_window(
     *,
@@ -38,7 +55,17 @@ def synthetic_window(
             )
         )
     return points
-
+# Function purpose: Loads fixture points into the structure expected by downstream
+#   code.
+# - Project role: Belongs to the test and regression coverage and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as name, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns list[TimeSeriesPoint] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 def load_fixture_points(name: str = "pod01_3h.csv") -> list[TimeSeriesPoint]:
     fixture_path = Path(__file__).resolve().parent / "fixtures" / name

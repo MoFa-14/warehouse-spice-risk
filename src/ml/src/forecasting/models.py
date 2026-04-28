@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Shared forecasting data structures.
+# - Project role: Defines feature extraction, analogue matching, scenario
+#   generation, evaluation, and forecasting utilities.
+# - Main data or concerns: Feature vectors, trajectories, event labels, metrics, and
+#   model configuration.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
+# - Why this matters: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+
 """Shared forecasting data structures.
 
 These dataclasses are the common language of the forecasting subsystem.
@@ -21,7 +32,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-
+# Class purpose: One resampled 1-minute telemetry point used by the forecaster.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class TimeSeriesPoint:
@@ -38,7 +57,15 @@ class TimeSeriesPoint:
     rh_pct: float
     dew_point_c: float
     observed: bool = True
-
+# Class purpose: Outcome of recent-event detection over the last 3 hours.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class EventDetectionResult:
@@ -59,7 +86,15 @@ class EventDetectionResult:
     temp_delta_c_5m: float = 0.0
     rh_delta_pct_5m: float = 0.0
     consecutive_points: int = 0
-
+# Class purpose: Named numerical features used for analogue similarity matching.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class FeatureVector:
@@ -75,7 +110,15 @@ class FeatureVector:
     values: dict[str, float]
     missing_rate: float
     observed_points: int
-
+# Class purpose: One point forecast scenario plus uncertainty bands.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class ForecastTrajectory:
@@ -98,7 +141,15 @@ class ForecastTrajectory:
     neighbor_count: int
     case_count: int
     notes: str = ""
-
+# Class purpose: Full forecasting output for one pod and one forecast timestamp.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class ForecastBundle:
@@ -120,7 +171,16 @@ class ForecastBundle:
     baseline: ForecastTrajectory
     event_persist: ForecastTrajectory | None = None
     metadata: dict[str, str | int | float] = field(default_factory=dict)
-
+# Class purpose: Persisted analogue case with features and the realized 30-minute
+#   future.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class CaseRecord:
@@ -139,7 +199,15 @@ class CaseRecord:
     future_temp_c: list[float]
     future_rh_pct: list[float]
     event_label: str = "none"
-
+# Class purpose: Forecast error summary for one scenario over the 30-minute horizon.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class EvaluationMetrics:

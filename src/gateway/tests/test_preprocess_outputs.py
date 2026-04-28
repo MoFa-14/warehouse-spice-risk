@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for preprocess outputs behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import csv
@@ -16,9 +25,27 @@ from gateway.protocol.decoder import TelemetryRecord
 from gateway.storage.paths import build_storage_paths
 from gateway.storage.raw_writer import RawTelemetryWriter
 from gateway.storage.schema import PROCESSED_COLUMNS, TRAINING_DATASET_COLUMNS
-
+# Class purpose: Groups related regression checks for PreprocessOutput behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class PreprocessOutputTests(unittest.TestCase):
+    # Test purpose: Verifies that preprocess creates expected schema and missing
+    #   markers behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PreprocessOutputTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_preprocess_creates_expected_schema_and_missing_markers(self) -> None:
         with TemporaryDirectory() as temp_dir:
             data_root = Path(temp_dir) / "data"
@@ -70,6 +97,16 @@ class PreprocessOutputTests(unittest.TestCase):
             self.assertEqual(rows[2]["ts_pc_utc"], "2026-03-25T00:02:00Z")
             self.assertEqual(rows[2]["missing"], "0")
             self.assertEqual(rows[2]["source_seq"], "2")
+    # Test purpose: Verifies that export training concatenates processed rows
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on PreprocessOutputTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_export_training_concatenates_processed_rows(self) -> None:
         with TemporaryDirectory() as temp_dir:

@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Monitoring-review summaries for longer historical windows.
+# - Project role: Builds route-ready view models, chart inputs, and interpretive
+#   summaries from loaded data.
+# - Main data or concerns: View models, chart series, classifications, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
+# - Why this matters: Keeping presentation logic here prevents routes and templates
+#   from reimplementing analysis rules.
+
 """Monitoring-review summaries for longer historical windows.
 
 The pod detail and prediction pages focus on a current or recent operational
@@ -21,7 +32,15 @@ from app.data_access.sqlite_reader import _connect, read_link_quality_sqlite, re
 from app.services.alerts_service import load_acknowledgements
 from app.services.thresholds import classify_storage_conditions, level_definition
 from app.services.timeseries_service import TimeWindow
-
+# Class purpose: One per-pod monitoring summary row.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class MonitoringReviewRow:
@@ -40,7 +59,17 @@ class MonitoringReviewRow:
     missing_rate: float
     recommendation_event_count: int
     gateway_warning_count: int
-
+# Function purpose: Build a per-pod review summary over a chosen historical window.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, window, db_path, pod_id, acks_file, now,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def build_monitoring_review_context(
     data_root: Path,
@@ -112,7 +141,20 @@ def build_monitoring_review_context(
             "active_acknowledgement_count": active_ack_count,
         },
     }
-
+# Function purpose: Aggregate one pod's telemetry, link, and forecast evidence into
+#   a row.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as pod_id, raw_frame, link_frame, forecast_frame,
+#   gateway_warning_count, interpreted according to the rules encoded in the body
+#   below.
+# - Outputs: Returns MonitoringReviewRow | None when the function completes
+#   successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _build_row(
     *,
@@ -149,7 +191,17 @@ def _build_row(
         recommendation_event_count=recommendation_events,
         gateway_warning_count=int(gateway_warning_count),
     )
-
+# Function purpose: Loads raw frame into the structure expected by downstream code.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, pod_id, window, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _load_raw_frame(data_root: Path, *, db_path: Path | None, pod_id: str | None, window: TimeWindow) -> pd.DataFrame:
     if db_path is not None and sqlite_db_exists(db_path):
@@ -168,7 +220,17 @@ def _load_raw_frame(data_root: Path, *, db_path: Path | None, pod_id: str | None
                 paths.extend(find_raw_pod_files(data_root, item, date_from=window.start.date(), date_to=window.end.date()))
         frame = read_raw_samples(paths)
     return _filter_window(frame, window)
-
+# Function purpose: Loads link frame into the structure expected by downstream code.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, pod_id, window, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _load_link_frame(data_root: Path, *, db_path: Path | None, pod_id: str | None, window: TimeWindow) -> pd.DataFrame:
     if db_path is not None and sqlite_db_exists(db_path):
@@ -183,13 +245,31 @@ def _load_link_frame(data_root: Path, *, db_path: Path | None, pod_id: str | Non
         if pod_id is not None and not frame.empty:
             frame = frame[frame["pod_id"] == str(pod_id)].copy()
     return _filter_window(frame, window)
-
+# Function purpose: Implements the filter window step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, window, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _filter_window(frame: pd.DataFrame, window: TimeWindow) -> pd.DataFrame:
     if frame.empty:
         return frame
     return frame[(frame["ts_pc_utc"] >= pd.Timestamp(window.start)) & (frame["ts_pc_utc"] <= pd.Timestamp(window.end))].copy()
-
+# Function purpose: Classifies levels according to the project rules below.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns list[int] when the function completes successfully.
+# - Important decisions: The implementation encodes a project decision point that
+#   later evaluation, storage, or dashboard logic depends on directly.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _classify_levels(raw_frame: pd.DataFrame) -> list[int]:
     levels: list[int] = []
@@ -199,7 +279,17 @@ def _classify_levels(raw_frame: pd.DataFrame) -> list[int]:
         status = classify_storage_conditions(_as_float(row.get("temp_c")), _as_float(row.get("rh_pct")))
         levels.append(0 if status is None else int(status.level))
     return levels
-
+# Function purpose: Count distinct periods where conditions entered warning or
+#   worse.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as levels, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _count_excursions(levels: list[int]) -> int:
     """Count distinct periods where conditions entered warning or worse."""
@@ -212,7 +302,17 @@ def _count_excursions(levels: list[int]) -> int:
         elif level < 2:
             in_excursion = False
     return count
-
+# Function purpose: Express the start-to-end movement of one metric in concise
+#   prose.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, value_column, unit, stable_threshold,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _trend_summary(raw_frame: pd.DataFrame, *, value_column: str, unit: str, stable_threshold: float) -> str:
     """Express the start-to-end movement of one metric in concise prose."""
@@ -229,7 +329,18 @@ def _trend_summary(raw_frame: pd.DataFrame, *, value_column: str, unit: str, sta
     else:
         direction = "Stable"
     return f"{direction} ({delta:+.2f} {unit} over window)"
-
+# Function purpose: Summarise missing, duplicate, and reconnect behaviour for the
+#   window.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as link_frame, raw_frame, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns dict[str, float | int] when the function completes
+#   successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _link_summary(link_frame: pd.DataFrame, raw_frame: pd.DataFrame) -> dict[str, float | int]:
     """Summarise missing, duplicate, and reconnect behaviour for the window."""
@@ -259,7 +370,17 @@ def _link_summary(link_frame: pd.DataFrame, raw_frame: pd.DataFrame) -> dict[str
         "reconnects": 0,
         "missing_rate": 0.0 if raw_frame.empty else float(_estimated_missing_from_samples(raw_frame) / max(len(raw_frame), 1)),
     }
-
+# Function purpose: Implements the estimated missing from samples step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _estimated_missing_from_samples(raw_frame: pd.DataFrame) -> int:
     if raw_frame.empty or "seq" not in raw_frame.columns:
@@ -282,7 +403,17 @@ def _estimated_missing_from_samples(raw_frame: pd.DataFrame) -> int:
         previous_seq = seq
         previous_uptime = uptime
     return missing
-
+# Function purpose: Implements the gateway warning counts step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as db_path, start_utc, end_utc, pod_id, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, int] when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _gateway_warning_counts(
     db_path: Path | None,
@@ -316,13 +447,31 @@ def _gateway_warning_counts(
     finally:
         connection.close()
     return {str(row["pod_id"]): int(row["warning_count"]) for row in rows if row["pod_id"] is not None}
-
+# Function purpose: Implements the as float step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _as_float(value) -> float | None:
     if value is None or pd.isna(value):
         return None
     return float(value)
-
+# Function purpose: Implements the to UTC iso step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _to_utc_iso(value: datetime) -> str:
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")

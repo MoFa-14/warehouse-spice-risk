@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Offline preprocessing and dataset export commands for Layer 3.
+# - Project role: Cleans, resamples, derives, or exports telemetry into
+#   analysis-ready forms.
+# - Main data or concerns: Time-series points, derived psychrometric variables, and
+#   resampled grids.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
+# - Why this matters: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+
 """Offline preprocessing and dataset export commands for Layer 3."""
 
 from __future__ import annotations
@@ -12,7 +23,17 @@ from gateway.preprocess.resample import ProcessedRow, resample_day
 from gateway.storage.paths import StoragePaths, build_storage_paths
 from gateway.storage.schema import PROCESSED_COLUMNS, TRAINING_DATASET_COLUMNS
 from gateway.utils.timeutils import utc_now_iso
-
+# Function purpose: Build one processed per-day CSV from one canonical raw day file.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as raw_path, data_root, interval_s, interpolate,
+#   max_gap_minutes, temp_min_c, temp_max_c, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns Path when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def preprocess_day_file(
     raw_path: Path,
@@ -44,7 +65,17 @@ def preprocess_day_file(
     output_path = storage_paths.processed_pod_day_path(pod_id, day)
     _write_processed_rows(output_path, processed_rows)
     return output_path
-
+# Function purpose: Process every matching raw day file in a date range.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_ids, date_from, date_to, interval_s,
+#   interpolate, max_gap_minutes, temp_min_c, temp_max_c, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def preprocess_date_range(
     *,
@@ -74,7 +105,17 @@ def preprocess_date_range(
             )
         )
     return outputs
-
+# Function purpose: Concatenate processed daily CSV files into one training-ready
+#   export.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as data_root, date_from, date_to, out_path, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns Path when the function completes successfully.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def export_training_dataset(
     *,
@@ -97,7 +138,17 @@ def export_training_dataset(
                 for row in csv.DictReader(processed_handle):
                     writer.writerow({column: row.get(column, "") for column in TRAINING_DATASET_COLUMNS})
     return destination
-
+# Function purpose: List canonical raw day files that fall inside the requested
+#   window.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as storage_paths, pod_ids, date_from, date_to,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def iter_raw_day_files(
     storage_paths: StoragePaths,
@@ -123,7 +174,16 @@ def iter_raw_day_files(
             if date_from <= day <= date_to:
                 files.append(day_file)
     return files
-
+# Function purpose: List processed day files within a requested export window.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as storage_paths, date_from, date_to, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def iter_processed_day_files(
     storage_paths: StoragePaths,
@@ -146,7 +206,17 @@ def iter_processed_day_files(
             if date_from <= day <= date_to:
                 files.append(day_file)
     return files
-
+# Function purpose: Writes processed rows into the configured destination.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as path, rows, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _write_processed_rows(path: Path, rows: list[ProcessedRow]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -155,7 +225,16 @@ def _write_processed_rows(path: Path, rows: list[ProcessedRow]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow(_processed_row_to_csv(row))
-
+# Function purpose: Implements the processed row to CSV step used by this subsystem.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as row, interpreted according to the rules encoded in the
+#   body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _processed_row_to_csv(row: ProcessedRow) -> dict[str, object]:
     return {

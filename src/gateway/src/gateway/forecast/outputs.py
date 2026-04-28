@@ -1,16 +1,26 @@
-"""Persist forecasts and evaluations in SQLite or JSONL form.
+# File overview:
+# - Responsibility: Forecast and evaluation persistence for the gateway pipeline.
+# - Project role: Connects stored telemetry to forecasting, persistence, evaluation,
+#   and calibration behavior.
+# - Main data or concerns: History windows, forecast bundles, evaluation rows, and
+#   calibration metadata.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
-This file is the evidence archive of the forecasting subsystem.
+"""Forecast and evaluation persistence for the gateway pipeline.
 
-The runner generates forecast bundles in memory, but those bundles only become
-useful to the wider project once they are persisted so that:
-- the dashboard can display the latest forecast
-- historical windows can be reviewed later
-- completed forecasts can be evaluated against what really happened
-- recent bias can be estimated for light calibration
+Responsibilities:
+- Stores forecast scenarios and later evaluation metrics in SQLite or JSONL.
+- Preserves the metadata needed for dashboard explanation, historical review,
+  and recent-bias calibration.
 
-In viva terms, this file is where forecast reasoning becomes a durable research
-record rather than a temporary runtime object.
+Project flow:
+- generated forecast bundle -> stored scenario rows -> later evaluation rows ->
+  dashboard read path + calibration read path
+
+Why this matters:
+- Forecasts become useful to the wider project only once they are stored in a
+  stable schema that later services can reload consistently.
 """
 
 from __future__ import annotations
@@ -70,6 +80,17 @@ EVALUATIONS_TABLE_SQL = """
 """
 
 
+# Class purpose: Median signed forecast bias over recent stored evaluations.
+# - Project role: Belongs to the gateway forecast orchestration layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
+
 @dataclass(frozen=True)
 class RecentBias:
     """Median signed forecast bias over recent stored evaluations.
@@ -84,15 +105,40 @@ class RecentBias:
     sample_count: int
 
 
-class ForecastOutputs:
-    """Write forecasts/evaluations to SQLite or JSONL with stable payloads.
+# Forecast archive adapter
+# - Purpose: writes and reloads forecast/evaluation artefacts using a stable
+#   storage contract.
+# - Project role: persistence boundary between runtime forecasting and later
+#   dashboard or calibration reads.
+# - Inputs: storage backend selection plus output locations.
+# - Outputs: durable forecast rows, evaluation rows, recent-bias summaries, and
+#   reconstructed in-memory trajectory objects.
+# Class purpose: Write forecasts/evaluations to SQLite or JSONL with stable
+#   payloads.
+# - Project role: Belongs to the gateway forecast orchestration layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
-    The dashboard depends heavily on the exact shape of these saved payloads, so
-    this class is effectively the contract between:
-    - live forecasting logic
-    - historical evaluation logic
-    - dashboard visualisation and analysis logic
-    """
+class ForecastOutputs:
+    """Write forecasts/evaluations to SQLite or JSONL with stable payloads."""
+
+    # Method purpose: Handles init for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as storage_backend, db_path, data_root,
+    #   interpreted according to the implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def __init__(
         self,
@@ -106,6 +152,21 @@ class ForecastOutputs:
         self.data_root = build_storage_paths(data_root).root
         self.forecasts_jsonl = self.data_root / "ml" / "forecasts.jsonl"
         self.evaluations_jsonl = self.data_root / "ml" / "evaluations.jsonl"
+
+    # Storage initialisation
+    # - Purpose: ensures the forecast/evaluation archive exists before reads or
+    #   writes proceed.
+    # Method purpose: Create forecast/evaluation storage if it does not already
+    #   exist.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def ensure_storage(self) -> None:
         """Create forecast/evaluation storage if it does not already exist."""
@@ -124,13 +185,27 @@ class ForecastOutputs:
         self.forecasts_jsonl.touch(exist_ok=True)
         self.evaluations_jsonl.touch(exist_ok=True)
 
-    def save_bundle(self, bundle: ForecastBundle) -> None:
-        """Persist one forecast bundle.
+    # Forecast bundle persistence
+    # - Purpose: stores the generated forecast bundle in a scenario-per-row
+    #   format.
+    # - Project role: write path immediately after forecast generation.
+    # - Important decision: one bundle may hold baseline and event-persist
+    #   scenarios, but storage uses one row per scenario for simpler later
+    #   querying.
+    # Method purpose: Persist one forecast bundle.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as bundle, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
-        A single bundle may contain both the baseline and event-persist
-        scenarios, so this method fans the bundle out into one stored row per
-        scenario.
-        """
+    def save_bundle(self, bundle: ForecastBundle) -> None:
+        """Persist one forecast bundle."""
         self.ensure_storage()
         scenarios = [bundle.baseline]
         if bundle.event_persist is not None:
@@ -146,6 +221,23 @@ class ForecastOutputs:
                     payload=payload,
                 )
 
+    # Due-evaluation lookup
+    # - Purpose: returns forecast rows whose horizon has elapsed but which still
+    #   lack evaluation records.
+    # Method purpose: Return forecasts that are old enough to evaluate and not
+    #   yet scored.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as cutoff_utc, pod_ids, interpreted according to
+    #   the implementation below.
+    # - Outputs: Returns list[dict[str, object]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def pending_evaluations(self, *, cutoff_utc: str, pod_ids: list[str] | None = None) -> list[dict[str, object]]:
         """Return forecasts that are old enough to evaluate and not yet scored."""
         self.ensure_storage()
@@ -153,12 +245,45 @@ class ForecastOutputs:
             return self._pending_sqlite(cutoff=cutoff_utc, pod_ids=pod_ids)
         return self._pending_jsonl(cutoff=cutoff_utc, pod_ids=pod_ids)
 
+    # Persistence-backfill lookup
+    # - Purpose: finds older evaluation rows that still need model-vs-
+    #   persistence comparison fields.
+    # Method purpose: Return older evaluations that still need persistence
+    #   comparison fields.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as cutoff_utc, pod_ids, interpreted according to
+    #   the implementation below.
+    # - Outputs: Returns list[dict[str, object]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def pending_persistence_backfill(self, *, cutoff_utc: str, pod_ids: list[str] | None = None) -> list[dict[str, object]]:
         """Return older evaluations that still need persistence comparison fields."""
         self.ensure_storage()
         if self.storage_backend == "sqlite":
             return self._pending_persistence_backfill_sqlite(cutoff=cutoff_utc, pod_ids=pod_ids)
         return self._pending_persistence_backfill_jsonl(cutoff=cutoff_utc, pod_ids=pod_ids)
+
+    # Evaluation persistence
+    # - Purpose: stores one completed evaluation row.
+    # - Downstream dependency: dashboard history, recent-bias calibration, and
+    #   later historical review all depend on these saved metrics.
+    # Method purpose: Persist one completed evaluation record.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as evaluation, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def save_evaluation(self, evaluation: EvaluationMetrics) -> None:
         """Persist one completed evaluation record."""
@@ -224,6 +349,24 @@ class ForecastOutputs:
             replace_existing=True,
         )
 
+    # Recent-bias read path
+    # - Purpose: derives a compact signed-bias summary from recent trustworthy
+    #   evaluation rows.
+    # - Project role: input to the runner's lightweight calibration step.
+    # Method purpose: Estimate recent signed bias for lightweight
+    #   auto-calibration.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as pod_id, scenario, limit, interpreted according
+    #   to the implementation below.
+    # - Outputs: Returns RecentBias | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def recent_bias(self, *, pod_id: str, scenario: str = "baseline", limit: int = 12) -> RecentBias | None:
         """Estimate recent signed bias for lightweight auto-calibration."""
         self.ensure_storage()
@@ -232,6 +375,23 @@ class ForecastOutputs:
         if self.storage_backend == "sqlite":
             return self._recent_bias_sqlite(pod_id=pod_id, scenario=scenario, limit=limit)
         return self._recent_bias_jsonl(pod_id=pod_id, scenario=scenario, limit=limit)
+
+    # Trajectory reconstruction
+    # - Purpose: converts one stored forecast row back into the in-memory
+    #   trajectory type used by evaluation and dashboard logic.
+    # Method purpose: Rebuild an in-memory trajectory from the stored forecast
+    #   payload.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as record, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns ForecastTrajectory when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def trajectory_from_record(self, record: dict[str, object]) -> ForecastTrajectory:
         """Rebuild an in-memory trajectory from the stored forecast payload."""
@@ -253,16 +413,62 @@ class ForecastOutputs:
             notes=str(forecast_json.get("notes") or ""),
         )
 
+    # Feature-vector recovery
+    # - Purpose: reloads the feature vector that anchored the original forecast.
+    # Method purpose: Recover the stored feature vector that anchored the
+    #   forecast.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as record, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns dict[str, float] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def feature_vector_from_record(self, record: dict[str, object]) -> dict[str, float]:
         """Recover the stored feature vector that anchored the forecast."""
         forecast_json = _coerce_json(record["json_forecast"])
         raw_features = forecast_json.get("feature_vector") or {}
         return {str(key): float(value) for key, value in raw_features.items()}
 
+    # Missing-rate recovery
+    # - Purpose: extracts the forecast-input missing-rate saved with a scenario
+    #   row.
+    # Method purpose: Read the missing-rate metadata saved with the forecast
+    #   row.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as record, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def forecast_missing_rate(self, record: dict[str, object]) -> float:
         """Read the missing-rate metadata saved with the forecast row."""
         forecast_json = _coerce_json(record["json_forecast"])
         return float(forecast_json.get("missing_rate") or 0.0)
+
+    # SQLite scenario write
+    # - Purpose: writes one scenario row into the integrated runtime database.
+    # Method purpose: Write one scenario row into SQLite.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as bundle, scenario, payload, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def _save_bundle_sqlite(self, *, bundle: ForecastBundle, scenario: ForecastTrajectory, payload: dict[str, object]) -> None:
         """Write one scenario row into SQLite."""
@@ -294,6 +500,21 @@ class ForecastOutputs:
         finally:
             connection.close()
 
+    # SQLite due-evaluation query
+    # - Purpose: returns unevaluated forecast rows up to the supplied cutoff.
+    # Method purpose: Query SQLite for forecasts that still need evaluation.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as cutoff, pod_ids, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns list[dict[str, object]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _pending_sqlite(self, *, cutoff: str, pod_ids: list[str] | None) -> list[dict[str, object]]:
         """Query SQLite for forecasts that still need evaluation."""
         connection = connect_sqlite(self.db_path, readonly=True)
@@ -322,6 +543,20 @@ class ForecastOutputs:
         finally:
             connection.close()
 
+    # Method purpose: Perform the same pending-evaluation lookup for JSONL
+    #   storage.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as cutoff, pod_ids, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns list[dict[str, object]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _pending_jsonl(self, *, cutoff: str, pod_ids: list[str] | None) -> list[dict[str, object]]:
         """Perform the same pending-evaluation lookup for JSONL storage."""
         forecasts = self._read_jsonl(self.forecasts_jsonl)
@@ -343,6 +578,20 @@ class ForecastOutputs:
             pending.append(item)
         pending.sort(key=lambda item: (str(item["ts_pc_utc"]), str(item["pod_id"]), str(item["scenario"])))
         return pending
+
+    # Method purpose: Query SQLite for evaluation rows missing persistence
+    #   metrics.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as cutoff, pod_ids, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns list[dict[str, object]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def _pending_persistence_backfill_sqlite(self, *, cutoff: str, pod_ids: list[str] | None) -> list[dict[str, object]]:
         """Query SQLite for evaluation rows missing persistence metrics."""
@@ -383,6 +632,20 @@ class ForecastOutputs:
         finally:
             connection.close()
 
+    # Method purpose: Perform the same persistence-backfill lookup for JSONL
+    #   storage.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as cutoff, pod_ids, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns list[dict[str, object]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _pending_persistence_backfill_jsonl(self, *, cutoff: str, pod_ids: list[str] | None) -> list[dict[str, object]]:
         """Perform the same persistence-backfill lookup for JSONL storage."""
         forecasts = {
@@ -405,6 +668,22 @@ class ForecastOutputs:
             pending.append({**item, **{name: forecast[name] for name in ("json_forecast", "json_p25", "json_p75")}})
         pending.sort(key=lambda item: (str(item["ts_forecast_utc"]), str(item["pod_id"]), str(item["scenario"])))
         return pending
+
+    # JSONL upsert helper
+    # - Purpose: appends or rewrites one JSONL payload while honouring the
+    #   chosen logical key.
+    # Method purpose: Append or replace one JSONL payload while respecting the
+    #   chosen key.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as path, key_fields, payload, replace_existing,
+    #   interpreted according to the implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def _append_jsonl(
         self,
@@ -431,6 +710,19 @@ class ForecastOutputs:
         with path.open("a", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(payload, separators=(",", ":"), sort_keys=True))
             handle.write("\n")
+
+    # Method purpose: Read recent trustworthy bias values from SQLite.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as pod_id, scenario, limit, interpreted according
+    #   to the implementation below.
+    # - Outputs: Returns RecentBias | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def _recent_bias_sqlite(self, *, pod_id: str, scenario: str, limit: int) -> RecentBias | None:
         """Read recent trustworthy bias values from SQLite."""
@@ -464,6 +756,19 @@ class ForecastOutputs:
             connection.close()
         return _rows_to_recent_bias(rows)
 
+    # Method purpose: Read recent trustworthy bias values from JSONL storage.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as pod_id, scenario, limit, interpreted according
+    #   to the implementation below.
+    # - Outputs: Returns RecentBias | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _recent_bias_jsonl(self, *, pod_id: str, scenario: str, limit: int) -> RecentBias | None:
         """Read recent trustworthy bias values from JSONL storage."""
         rows = [
@@ -479,6 +784,19 @@ class ForecastOutputs:
         rows.sort(key=lambda item: str(item.get("ts_forecast_utc") or ""), reverse=True)
         return _rows_to_recent_bias(rows[:limit])
 
+    # Method purpose: Reads JSONL for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastOutputs.
+    # - Inputs: Arguments such as path, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns list[dict[str, object]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     @staticmethod
     def _read_jsonl(path: Path) -> list[dict[str, object]]:
         if not path.exists():
@@ -491,15 +809,28 @@ class ForecastOutputs:
         return items
 
 
-def _scenario_payload(bundle: ForecastBundle, scenario: ForecastTrajectory) -> dict[str, object]:
-    """Serialize one in-memory scenario into the stable stored payload format.
+# Scenario serialisation
+# - Purpose: converts one in-memory scenario into the stable stored payload
+#   expected by forecast-loading code and dashboard services.
+# - Important fields:
+#   - feature vector for the forecast anchor
+#   - source and notes for method explanation
+#   - dew-point path for direct downstream display
+# Function purpose: Serialize one in-memory scenario into the stable stored payload
+#   format.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as bundle, scenario, interpreted according to the
+#   implementation below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
-    The dashboard later depends on these embedded fields, especially:
-    - the feature vector, which explains the forecast anchor
-    - the source/notes fields, which explain how the forecast was produced
-    - the dew-point trajectory, which is derived upstream and stored here for
-      direct display
-    """
+def _scenario_payload(bundle: ForecastBundle, scenario: ForecastTrajectory) -> dict[str, object]:
+    """Serialize one in-memory scenario into the stable stored payload format."""
     return {
         "ts_pc_utc": bundle.ts_pc_utc,
         "pod_id": bundle.pod_id,
@@ -531,12 +862,43 @@ def _scenario_payload(bundle: ForecastBundle, scenario: ForecastTrajectory) -> d
     }
 
 
+# JSON coercion
+# - Purpose: lets callers handle forecast payloads regardless of whether they
+#   arrived already decoded or as stored JSON text.
+# Function purpose: Accept either an already-decoded dict or a stored JSON string.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the implementation
+#   below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
+
 def _coerce_json(value: object) -> dict[str, object]:
     """Accept either an already-decoded dict or a stored JSON string."""
     if isinstance(value, dict):
         return value
     return json.loads(str(value))
 
+
+# Evaluation schema migration
+# - Purpose: keeps older SQLite archives compatible with newer evaluation
+#   fields without requiring a separate migration tool.
+# Function purpose: Lazily add newer evaluation columns to older databases when
+#   needed.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the
+#   implementation below.
+# - Outputs: Returns None when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
 def _ensure_evaluation_columns(connection: sqlite3.Connection) -> None:
     """Lazily add newer evaluation columns to older databases when needed."""
@@ -555,6 +917,18 @@ def _ensure_evaluation_columns(connection: sqlite3.Connection) -> None:
         connection.execute("ALTER TABLE evaluations ADD COLUMN BIAS_RH REAL NOT NULL DEFAULT 0")
 
 
+# Function purpose: Return the current evaluation-table column names.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the
+#   implementation below.
+# - Outputs: Returns set[str] when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
+
 def _evaluation_columns(connection: sqlite3.Connection) -> set[str]:
     """Return the current evaluation-table column names."""
     return {
@@ -562,6 +936,21 @@ def _evaluation_columns(connection: sqlite3.Connection) -> set[str]:
         for row in connection.execute("PRAGMA table_info(evaluations)").fetchall()
     }
 
+
+# Recent-bias aggregation
+# - Purpose: converts stored bias rows into a robust median summary that can be
+#   applied safely as a lightweight calibration offset.
+# Function purpose: Convert stored bias rows into a robust median bias summary.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as rows, interpreted according to the implementation
+#   below.
+# - Outputs: Returns RecentBias | None when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
 def _rows_to_recent_bias(rows) -> RecentBias | None:
     """Convert stored bias rows into a robust median bias summary."""
@@ -586,6 +975,22 @@ def _rows_to_recent_bias(rows) -> RecentBias | None:
         sample_count=min(len(temp_biases), len(rh_biases)),
     )
 
+
+# Calibration-eligibility filter
+# - Purpose: excludes windows whose notes indicate missing-data issues that make
+#   them unsuitable as calibration evidence.
+# Function purpose: Filter out windows whose notes mark them as unsuitable for
+#   calibration.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as notes, interpreted according to the implementation
+#   below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
 def _notes_support_calibration(notes: str) -> bool:
     """Filter out windows whose notes mark them as unsuitable for calibration."""

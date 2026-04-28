@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Append-only raw telemetry writer with file-backed dedupe.
+# - Project role: Stores raw telemetry, link diagnostics, and exportable datasets in
+#   canonical formats.
+# - Main data or concerns: SQLite rows, CSV rows, schema definitions, and storage
+#   paths.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
+# - Why this matters: Persistence code matters because the rest of the project only
+#   sees what this layer records and exposes.
+
 """Append-only raw telemetry writer with file-backed dedupe."""
 
 from __future__ import annotations
@@ -12,10 +23,32 @@ from gateway.storage.paths import StoragePaths, build_storage_paths
 from gateway.storage.sample_csv import build_sample_row, ensure_sample_csv_schema
 from gateway.storage.schema import RAW_SAMPLE_COLUMNS, QualityFlag, has_quality_flag, parse_quality_mask, quality_flags_to_mask
 from gateway.utils.timeutils import parse_utc_iso
-
+# Class purpose: Small line-buffered CSV append helper shared across Layer 3
+#   writers.
+# - Project role: Belongs to the gateway persistence layer and groups related state
+#   or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 class CsvAppendWriter:
     """Small line-buffered CSV append helper shared across Layer 3 writers."""
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on CsvAppendWriter.
+    # - Inputs: Arguments such as path, fieldnames, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def __init__(self, path: Path, fieldnames: list[str]) -> None:
         self.path = path
@@ -26,17 +59,46 @@ class CsvAppendWriter:
         if not file_exists:
             self._writer.writeheader()
             self._handle.flush()
+    # Method purpose: Writes row into the configured destination.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on CsvAppendWriter.
+    # - Inputs: Arguments such as row, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def write_row(self, row: Mapping[str, Any]) -> None:
         serializable = {key: ("" if value is None else value) for key, value in row.items()}
         self._writer.writerow(serializable)
         self._handle.flush()
+    # Method purpose: Implements the close step used by this subsystem.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on CsvAppendWriter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence code matters because the rest of the
+    #   project only sees what this layer records and exposes.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def close(self) -> None:
         if not self._handle.closed:
             self._handle.flush()
             self._handle.close()
-
+# Class purpose: Outcome of attempting to append a raw sample row.
+# - Project role: Belongs to the gateway persistence layer and groups related state
+#   or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 @dataclass(frozen=True)
 class RawWriteResult:
@@ -45,16 +107,50 @@ class RawWriteResult:
     inserted: bool
     duplicate: bool
     path: Path
-
+# Class purpose: Persist canonical raw telemetry rows into per-pod, per-day CSV
+#   files.
+# - Project role: Belongs to the gateway persistence layer and groups related state
+#   or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 class RawTelemetryWriter:
     """Persist canonical raw telemetry rows into per-pod, per-day CSV files."""
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on RawTelemetryWriter.
+    # - Inputs: Arguments such as data_root, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def __init__(self, data_root: Path | str | None = None) -> None:
         self.paths: StoragePaths = build_storage_paths(data_root)
         self.paths.ensure_base_dirs()
         self._writers: dict[Path, CsvAppendWriter] = {}
         self._seen_by_path: dict[Path, set[int]] = {}
+    # Method purpose: Append one raw sample row unless the sequence is already
+    #   stored.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on RawTelemetryWriter.
+    # - Inputs: Arguments such as ts_pc_utc, record, rssi, quality_flags,
+    #   interpreted according to the rules encoded in the body below.
+    # - Outputs: Returns RawWriteResult when the function completes
+    #   successfully.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def write_sample(
         self,
@@ -87,11 +183,32 @@ class RawTelemetryWriter:
         )
         seen_sequences.add(record.seq)
         return RawWriteResult(inserted=True, duplicate=False, path=path)
+    # Method purpose: Implements the close step used by this subsystem.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on RawTelemetryWriter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence code matters because the rest of the
+    #   project only sees what this layer records and exposes.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def close(self) -> None:
         for writer in self._writers.values():
             writer.close()
         self._writers.clear()
+    # Method purpose: Implements the writer for step used by this subsystem.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on RawTelemetryWriter.
+    # - Inputs: Arguments such as path, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns CsvAppendWriter when the function completes
+    #   successfully.
+    # - Important decisions: Persistence code matters because the rest of the
+    #   project only sees what this layer records and exposes.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def _writer_for(self, path: Path) -> CsvAppendWriter:
         writer = self._writers.get(path)
@@ -100,6 +217,18 @@ class RawTelemetryWriter:
             writer = CsvAppendWriter(path, RAW_SAMPLE_COLUMNS)
             self._writers[path] = writer
         return writer
+    # Method purpose: Loads seen sequences into the structure expected by
+    #   downstream code.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on RawTelemetryWriter.
+    # - Inputs: Arguments such as path, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns set[int] when the function completes successfully.
+    # - Important decisions: The transformation rules here define how later code
+    #   interprets the same data, so the shape of the output needs to stay
+    #   stable and reproducible.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     def _load_seen_sequences(self, path: Path) -> set[int]:
         seen = self._seen_by_path.get(path)

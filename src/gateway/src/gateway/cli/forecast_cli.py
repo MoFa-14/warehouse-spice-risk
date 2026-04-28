@@ -1,3 +1,13 @@
+# File overview:
+# - Responsibility: Forecast CLI for one-shot and recurring pod forecasting.
+# - Project role: Exposes operator-facing commands for gateway runtime, storage, and
+#   forecasting tasks.
+# - Main data or concerns: CLI arguments, runtime options, and command outcomes.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
+# - Why this matters: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+
 """Forecast CLI for one-shot and recurring pod forecasting."""
 
 from __future__ import annotations
@@ -18,7 +28,16 @@ from forecasting.scheduler import ForecastScheduler
 
 
 LOGGER = logging.getLogger(__name__)
-
+# Function purpose: Parses args into structured values.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Warehouse Spice Risk forecasting tools")
@@ -32,7 +51,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     _validate_args(parser, args)
     return args
-
+# Function purpose: Implements the add common arguments step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as parser, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns argparse.ArgumentParser when the function completes
+#   successfully.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def _add_common_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     scope = parser.add_mutually_exclusive_group(required=True)
@@ -56,7 +85,17 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> argparse.ArgumentP
     )
     parser.add_argument("--verbose", action="store_true", help="Enable more detailed logging.")
     return parser
-
+# Function purpose: Validates args before it enters later storage or analysis.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as parser, args, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if args.history_minutes != 180:
@@ -71,12 +110,31 @@ def _validate_args(parser: argparse.ArgumentParser, args: argparse.Namespace) ->
         parser.error("--every-minutes must be positive.")
     if getattr(args, "duration", None) is not None and args.duration <= 0:
         parser.error("--duration must be positive when provided.")
-
+# Function purpose: Implements the configure logging step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as verbose, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def configure_logging(verbose: bool) -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("gateway").setLevel(logging.DEBUG if verbose else logging.INFO)
-
+# Function purpose: Implements the CLI step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def cli(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
@@ -111,6 +169,19 @@ def cli(argv: Sequence[str] | None = None) -> int:
 
         scheduler = ForecastScheduler(every_minutes=args.every_minutes, duration_s=args.duration, align_to_wall_clock=False)
 
+        # Function purpose: Bridges the scheduler tick to one forecast cycle
+        #   execution.
+        # - Project role: Belongs to the gateway CLI entry-point layer and
+        #   contributes one focused step within that subsystem.
+        # - Inputs: Arguments such as run_time, interpreted according to the
+        #   rules encoded in the body below.
+        # - Outputs: No direct return value; the function performs state updates
+        #   or side effects.
+        # - Important decisions: The callback keeps scheduler concerns separate
+        #   from forecast execution while preserving the run timestamp used by
+        #   logging and UTC-aligned forecasting.
+        # - Related flow: Receives command-line arguments and dispatches to
+        #   gateway services.
         def _callback(run_time: datetime) -> None:
             LOGGER.info("forecast cycle start ts=%s pods=%s backend=%s", run_time.isoformat(), ",".join(pod_ids), runner.active_storage_backend)
             runner.run_cycle(pod_ids=pod_ids, requested_time_utc=run_time.astimezone(timezone.utc))
@@ -119,7 +190,16 @@ def cli(argv: Sequence[str] | None = None) -> int:
         return 0
     finally:
         lock.release()
-
+# Function purpose: Implements the bundle to dict step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as bundle, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def _bundle_to_dict(bundle) -> dict[str, object]:
     payload = {
@@ -135,7 +215,16 @@ def _bundle_to_dict(bundle) -> dict[str, object]:
     if bundle.event_persist is not None:
         payload["event_persist"] = _scenario_to_dict(bundle.event_persist)
     return payload
-
+# Function purpose: Implements the scenario to dict step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as trajectory, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def _scenario_to_dict(trajectory) -> dict[str, object]:
     return {

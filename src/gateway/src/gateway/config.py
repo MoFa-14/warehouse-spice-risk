@@ -1,3 +1,13 @@
+# File overview:
+# - Responsibility: Gateway runtime configuration and CLI-facing settings.
+# - Project role: Defines configuration and top-level runtime wiring for live
+#   gateway operation.
+# - Main data or concerns: Runtime options, configuration values, and top-level
+#   service wiring.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
+# - Why this matters: Top-level runtime wiring determines how the live ingestion and
+#   storage path is assembled.
+
 """Gateway runtime configuration and CLI-facing settings."""
 
 from __future__ import annotations
@@ -7,7 +17,14 @@ from pathlib import Path
 
 from gateway.firmware_config_loader import FirmwareConfig, default_firmware_config_path, load_firmware_config
 from gateway.storage.sqlite_db import resolve_db_path
-
+# Class purpose: Telemetry value validation settings.
+# - Project role: Belongs to the gateway runtime layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 @dataclass(frozen=True)
 class ValidationSettings:
@@ -15,7 +32,14 @@ class ValidationSettings:
 
     temp_min_c: float = -20.0
     temp_max_c: float = 80.0
-
+# Class purpose: Resolved runtime settings for the gateway process.
+# - Project role: Belongs to the gateway runtime layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 @dataclass(frozen=True)
 class GatewaySettings:
@@ -34,20 +58,57 @@ class GatewaySettings:
     use_cached_services: bool = False
     ble_name_prefix: str | None = None
     expected_sample_interval_s: int | None = None
+    # Method purpose: Implements the device name scan prefix step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewaySettings.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns str when the function completes successfully.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     @property
     def device_name_scan_prefix(self) -> str:
         return self.ble_name_prefix or self.firmware.device_name_scan_prefix
+    # Method purpose: Implements the sample interval s step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewaySettings.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns int when the function completes successfully.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     @property
     def sample_interval_s(self) -> int:
         return int(self.expected_sample_interval_s or self.firmware.sample_interval_s)
-
+# Function purpose: Normalize a BLE MAC string for comparisons and logging.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as address, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 def normalize_address(address: str) -> str:
     """Normalize a BLE MAC string for comparisons and logging."""
     return address.strip().upper()
-
+# Function purpose: Parse repeated or comma-separated CLI address values.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as values, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns tuple[str, ...] when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 def parse_addresses(values: list[str] | None) -> tuple[str, ...]:
     """Parse repeated or comma-separated CLI address values."""
@@ -64,7 +125,19 @@ def parse_addresses(values: list[str] | None) -> tuple[str, ...]:
             normalized.append(candidate)
             seen.add(candidate)
     return tuple(normalized)
-
+# Function purpose: Load the authoritative firmware config and merge user overrides.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as firmware_config_path, log_dir, addresses,
+#   scan_timeout_s, metrics_interval_s, rssi_poll_interval_s, temp_min_c,
+#   temp_max_c, send_command, use_cached_services, storage_backend, db_path,
+#   ble_name_prefix, expected_sample_interval_s, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns GatewaySettings when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 def build_settings(
     *,

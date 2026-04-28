@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: BLE session management for pod scanning, connect/reconnect, and
+#   notifications.
+# - Project role: Handles BLE discovery, connection, and GATT interaction for the
+#   physical pod path.
+# - Main data or concerns: BLE addresses, characteristics, notifications, and
+#   connection state.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
+# - Why this matters: The physical pod path depends on this layer to convert radio
+#   interaction into usable gateway events.
+
 """BLE session management for pod scanning, connect/reconnect, and notifications."""
 
 from __future__ import annotations
@@ -27,7 +39,15 @@ SampleHandler = Callable[[TelemetryRecord, tuple[str, ...], LinkStats, str], Awa
 CorruptHandler = Callable[[], Awaitable[None]]
 ConnectHandler = Callable[[bool], Awaitable[None]]
 DisconnectHandler = Callable[[], Awaitable[None]]
-
+# Class purpose: Pod identity used by the gateway supervisor.
+# - Project role: Belongs to the gateway BLE transport layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The physical pod path depends on this layer to convert
+#   radio interaction into usable gateway events.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
 
 @dataclass(frozen=True)
 class PodTarget:
@@ -35,10 +55,32 @@ class PodTarget:
 
     address: str
     name: str
-
+# Class purpose: Manage the BLE lifecycle for one pod, including reconnects.
+# - Project role: Belongs to the gateway BLE transport layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The physical pod path depends on this layer to convert
+#   radio interaction into usable gateway events.
+# - Related flow: Receives BLE-facing configuration or requests and passes transport
+#   results to ingestion.
 
 class PodSession:
     """Manage the BLE lifecycle for one pod, including reconnects."""
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as target, settings, profile, sample_handler,
+    #   corrupt_handler, connect_handler, disconnect_handler, interpreted
+    #   according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def __init__(
         self,
@@ -71,6 +113,16 @@ class PodSession:
         self._watchdog_resubscribe_issued_at: datetime | None = None
         self._watchdog_reconnect_requested_at: datetime | None = None
         self._logger = logging.getLogger(f"{__name__}.{normalize_address(target.address).replace(':', '')}")
+    # Method purpose: Run the reconnect loop until the gateway is stopped.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def run(self) -> None:
         """Run the reconnect loop until the gateway is stopped."""
@@ -141,12 +193,32 @@ class PodSession:
             delay = backoff.next_delay()
             self._logger.debug("Scheduling reconnect to %s in %.1fs", self.target.address, delay)
             await self._sleep_or_stop(delay)
+    # Method purpose: Request a clean shutdown of the session.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def stop(self) -> None:
         """Request a clean shutdown of the session."""
         self._stop_event.set()
         self._disconnected_event.set()
         await self._disconnect_client()
+    # Method purpose: Best-effort RSSI refresh using a short scan.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def refresh_rssi(self) -> None:
         """Best-effort RSSI refresh using a short scan."""
@@ -158,6 +230,18 @@ class PodSession:
         )
         if scan_match is not None:
             self.stats.update_rssi(scan_match.rssi)
+    # Method purpose: Implements the synchronize runtime step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as client, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _synchronize_runtime(self, client: BleakClient) -> None:
         status = await self._read_status(client)
@@ -172,6 +256,18 @@ class PodSession:
             refreshed_status = await self._read_status(client)
             if refreshed_status is not None and refreshed_status != status:
                 self._log_status_record(refreshed_status)
+    # Method purpose: Reads status from the relevant storage or runtime source.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as client, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns StatusRecord | None when the function completes
+    #   successfully.
+    # - Important decisions: The transformation rules here define how later code
+    #   interprets the same data, so the shape of the output needs to stay
+    #   stable and reproducible.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _read_status(self, client: BleakClient) -> StatusRecord | None:
         try:
@@ -182,6 +278,18 @@ class PodSession:
         except Exception as exc:
             self._logger.warning("Status read warning for %s: %s", self.target.address, exc)
         return None
+    # Method purpose: Implements the log status record step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as status, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _log_status_record(self, status: StatusRecord) -> None:
         self._logger.debug(
@@ -190,6 +298,17 @@ class PodSession:
             status.last_error,
             status.sample_interval_s,
         )
+    # Method purpose: Implements the maybe send command step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as client, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _maybe_send_command(self, client: BleakClient) -> bool:
         if not self.settings.send_command:
@@ -200,6 +319,17 @@ class PodSession:
         await write_control_command(client, self.profile, command)
         self._logger.debug("control command sent: %s", command)
         return True
+    # Method purpose: Implements the maybe enforce sample interval step used by
+    #   this subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as client, status, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _maybe_enforce_sample_interval(self, client: BleakClient, status: StatusRecord | None) -> bool:
         desired_interval_s = int(self.settings.sample_interval_s)
@@ -224,11 +354,33 @@ class PodSession:
                 status.sample_interval_s,
             )
         return True
+    # Method purpose: Implements the has explicit interval command step used by
+    #   this subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _has_explicit_interval_command(self) -> bool:
         if not self.settings.send_command:
             return False
         return self.settings.send_command.strip().upper().startswith("SET_INTERVAL")
+    # Method purpose: Implements the handle notification step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as _characteristic, payload, interpreted
+    #   according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _handle_notification(self, _characteristic, payload: bytearray) -> None:
         async with self._notification_lock:
@@ -299,6 +451,18 @@ class PodSession:
                         record.seq,
                         exc_info=(type(exc), exc, exc.__traceback__),
                     )
+    # Method purpose: Implements the wait until disconnect or stop step used by
+    #   this subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as *extra_tasks, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _wait_until_disconnect_or_stop(self, *extra_tasks: asyncio.Task[None]) -> None:
         stop_wait = asyncio.create_task(self._stop_event.wait())
@@ -311,12 +475,34 @@ class PodSession:
                 await task
         for task in done:
             task.result()
+    # Method purpose: Implements the sleep or stop step used by this subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as delay_s, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _sleep_or_stop(self, delay_s: float) -> None:
         try:
             await asyncio.wait_for(self._stop_event.wait(), timeout=delay_s)
         except asyncio.TimeoutError:
             return
+    # Method purpose: Implements the disconnect client step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _disconnect_client(self) -> None:
         client, self._client = self._client, None
@@ -331,11 +517,34 @@ class PodSession:
         self._connected_since_utc = None
         self._reset_watchdog_state()
         self.stats.mark_disconnected()
+    # Method purpose: Implements the on disconnected step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as _client, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _on_disconnected(self, _client: BleakClient) -> None:
         if self._loop is None:
             return
         self._loop.call_soon_threadsafe(self._handle_disconnected_event)
+    # Method purpose: Implements the handle disconnected event step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _handle_disconnected_event(self) -> None:
         self._connected_since_utc = None
@@ -346,6 +555,18 @@ class PodSession:
             task.add_done_callback(self._log_background_callback_exception)
         self._disconnected_event.set()
         self._logger.debug("Disconnected from %s", self.target.address)
+    # Method purpose: Implements the log background callback exception step used
+    #   by this subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as task, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _log_background_callback_exception(self, task: asyncio.Task[None]) -> None:
         if task.cancelled():
@@ -358,11 +579,34 @@ class PodSession:
                 self.target.address,
                 exc_info=(type(exc), exc, exc.__traceback__),
             )
+    # Method purpose: Implements the telemetry watchdog loop step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _telemetry_watchdog_loop(self) -> None:
         while not self._stop_event.is_set() and not self._disconnected_event.is_set():
             await asyncio.sleep(self._watchdog_poll_interval_s())
             await self._telemetry_watchdog_tick()
+    # Method purpose: Implements the telemetry watchdog tick step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as now, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _telemetry_watchdog_tick(self, now: datetime | None = None) -> None:
         action = self._determine_watchdog_action(now or utc_now())
@@ -394,6 +638,17 @@ class PodSession:
                     self.target.address,
                     exc_info=(type(exc), exc, exc.__traceback__),
                 )
+    # Method purpose: Implements the determine watchdog action step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as now, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns str | None when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _determine_watchdog_action(self, now: datetime) -> str | None:
         client = self._client
@@ -429,6 +684,17 @@ class PodSession:
             return "reconnect"
 
         return None
+    # Method purpose: Implements the force resubscribe step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _force_resubscribe(self) -> None:
         client = self._client
@@ -439,6 +705,17 @@ class PodSession:
             with contextlib.suppress(Exception):
                 await client.stop_notify(self.profile.telemetry_char_uuid)
             await client.start_notify(self.profile.telemetry_char_uuid, self._handle_notification)
+    # Method purpose: Implements the force reconnect step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def _force_reconnect(self) -> None:
         client = self._client
@@ -447,27 +724,92 @@ class PodSession:
         if getattr(client, "is_connected", False):
             await client.disconnect()
         self._handle_disconnected_event()
+    # Method purpose: Implements the reset watchdog state step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as clear_telemetry, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _reset_watchdog_state(self, *, clear_telemetry: bool = True) -> None:
         self._watchdog_resubscribe_issued_at = None
         self._watchdog_reconnect_requested_at = None
         if clear_telemetry:
             self._last_telemetry_time_utc = None
+    # Method purpose: Implements the telemetry stall timeout s step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _telemetry_stall_timeout_s(self) -> float:
         return (2.0 * float(self.settings.sample_interval_s)) + 5.0
+    # Method purpose: Implements the telemetry reconnect timeout s step used by
+    #   this subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _telemetry_reconnect_timeout_s(self) -> float:
         return max(float(self.settings.sample_interval_s) + 5.0, 5.0)
+    # Method purpose: Implements the watchdog poll interval s step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _watchdog_poll_interval_s(self) -> float:
         return max(1.0, min(5.0, float(self.settings.sample_interval_s)))
+    # Method purpose: Implements the seconds since last telemetry step used by
+    #   this subsystem.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as now, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     def _seconds_since_last_telemetry(self, now: datetime) -> float:
         reference_time = self._last_telemetry_time_utc or self._connected_since_utc
         if reference_time is None:
             return 0.0
         return max((now - reference_time).total_seconds(), 0.0)
+    # Method purpose: Best-effort resend request written to the pod control
+    #   characteristic.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as seq, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def request_resend_seq(self, seq: int) -> None:
         """Best-effort resend request written to the pod control characteristic."""
@@ -478,6 +820,18 @@ class PodSession:
         command = f"REQ_SEQ:{int(seq)}"
         await write_control_command(client, self.profile, command)
         self._logger.debug("BLE resend requested (stub) seq=%s", seq)
+    # Method purpose: Best-effort resend range request written to the pod
+    #   control characteristic.
+    # - Project role: Belongs to the gateway BLE transport layer and acts as a
+    #   method on PodSession.
+    # - Inputs: Arguments such as from_seq, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The physical pod path depends on this layer to
+    #   convert radio interaction into usable gateway events.
+    # - Related flow: Receives BLE-facing configuration or requests and passes
+    #   transport results to ingestion.
 
     async def request_resend_from_seq(self, from_seq: int) -> None:
         """Best-effort resend range request written to the pod control characteristic."""

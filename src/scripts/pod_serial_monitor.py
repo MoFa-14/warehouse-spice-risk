@@ -1,10 +1,30 @@
+# File overview:
+# - Responsibility: Implements the pod serial monitor logic for this project area.
+# - Project role: Provides convenience entry points for monitoring, forecasting, and
+#   evaluation workflows.
+# - Main data or concerns: Command-line options, runtime handles, and script-level
+#   control flow.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
+# - Why this matters: Scripts matter because they are the shortest operational path
+#   into the project for routine runs.
+
 import argparse
 import sys
 import time
 
 import serial
 import serial.tools.list_ports
-
+# Function purpose: Parses args into structured values.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Watch CircuitPython USB serial logs from the pod.")
@@ -13,13 +33,32 @@ def parse_args():
     parser.add_argument("--duration", type=int, default=0, help="Seconds to watch. 0 means forever.")
     parser.add_argument("--list", action="store_true", help="List available serial ports and exit.")
     return parser.parse_args()
-
+# Function purpose: Lists ports for later iteration or selection.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def list_ports():
     print("Available ports:")
     for port in serial.tools.list_ports.comports():
         print(f" - {port.device}: {port.description}")
-
+# Function purpose: Dispatches the top-level script entry point and forwards
+#   command-line arguments into the underlying runtime path.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def main():
     args = parse_args()

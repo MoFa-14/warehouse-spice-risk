@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Uniform-grid resampling for per-pod daily processed datasets.
+# - Project role: Cleans, resamples, derives, or exports telemetry into
+#   analysis-ready forms.
+# - Main data or concerns: Time-series points, derived psychrometric variables, and
+#   resampled grids.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
+# - Why this matters: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+
 """Uniform-grid resampling for per-pod daily processed datasets."""
 
 from __future__ import annotations
@@ -8,7 +19,15 @@ from typing import Sequence
 
 from gateway.preprocess.clean import CleanSampleRow
 from gateway.preprocess.dewpoint import dew_point_c
-
+# Class purpose: One uniform-grid processed time-series row.
+# - Project role: Belongs to the gateway preprocessing layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 @dataclass
 class ProcessedRow:
@@ -22,17 +41,45 @@ class ProcessedRow:
     missing: int
     interpolated: int
     source_seq: int | None
-
+# Function purpose: Implements the day start step used by this subsystem.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as day, interpreted according to the rules encoded in the
+#   body below.
+# - Outputs: Returns datetime when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _day_start(day: date) -> datetime:
     return datetime.combine(day, time.min, tzinfo=timezone.utc)
-
+# Function purpose: Implements the bucket start step used by this subsystem.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as moment, day_start, interval_s, interpreted according
+#   to the rules encoded in the body below.
+# - Outputs: Returns datetime when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _bucket_start(moment: datetime, *, day_start: datetime, interval_s: int) -> datetime:
     seconds_from_start = int((moment - day_start).total_seconds())
     offset = (seconds_from_start // interval_s) * interval_s
     return day_start + timedelta(seconds=offset)
-
+# Function purpose: Resample one pod/day into a full-day uniform grid.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as rows, day, pod_id, interval_s, interpolate,
+#   max_gap_minutes, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns list[ProcessedRow] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def resample_day(
     rows: Sequence[CleanSampleRow],
@@ -94,7 +141,18 @@ def resample_day(
         row.dew_point_c = dew_point_c(row.temp_c_clean, row.rh_pct_clean)
 
     return processed
-
+# Function purpose: Implements the interpolate small gaps step used by this
+#   subsystem.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as rows, interval_s, max_gap_minutes, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _interpolate_small_gaps(rows: list[ProcessedRow], *, interval_s: int, max_gap_minutes: int) -> None:
     max_gap_seconds = max_gap_minutes * 60
@@ -123,7 +181,16 @@ def _interpolate_small_gaps(rows: list[ProcessedRow], *, interval_s: int, max_ga
             row.temp_c_clean = temp_c
             row.rh_pct_clean = rh_pct
             row.interpolated = 1
-
+# Function purpose: Implements the lerp step used by this subsystem.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as start, end, ratio, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _lerp(start: float | None, end: float | None, ratio: float) -> float | None:
     if start is None or end is None:

@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Measure end-to-end latency through the TCP -> gateway -> SQLite
+#   -> dashboard path.
+# - Project role: Provides convenience entry points for monitoring, forecasting, and
+#   evaluation workflows.
+# - Main data or concerns: Command-line options, runtime handles, and script-level
+#   control flow.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
+# - Why this matters: Scripts matter because they are the shortest operational path
+#   into the project for routine runs.
+
 """Measure end-to-end latency through the TCP -> gateway -> SQLite -> dashboard path."""
 
 from __future__ import annotations
@@ -37,7 +49,15 @@ from werkzeug.serving import make_server
 
 UTC = timezone.utc
 DEFAULT_RESULTS_DIR = ROOT / "evaluation" / "results"
-
+# Function purpose: Parses args into structured values.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Measure gateway/database/dashboard latency using the TCP pod path.")
@@ -51,29 +71,114 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--poll-interval-ms", type=int, default=25, help="Polling cadence for DB/API checks.")
     parser.add_argument("--timeout-seconds", type=float, default=10.0, help="Per-sample timeout for each stage.")
     return parser.parse_args()
-
+# Class purpose: Encapsulates the LoopThread responsibilities used by this module.
+# - Project role: Belongs to the operator automation script layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 class LoopThread:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on LoopThread.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
+
     def __init__(self) -> None:
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self._run, name="latency-eval-loop", daemon=True)
+    # Method purpose: Implements the start step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on LoopThread.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     def start(self) -> None:
         self.thread.start()
+    # Method purpose: Implements the run step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on LoopThread.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     def _run(self) -> None:
         asyncio.set_event_loop(self.loop)
         self.loop.run_forever()
+    # Method purpose: Implements the run step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on LoopThread.
+    # - Inputs: Arguments such as coro, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     def run(self, coro):
         return asyncio.run_coroutine_threadsafe(coro, self.loop).result()
+    # Method purpose: Implements the stop step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on LoopThread.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     def stop(self) -> None:
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.thread.join(timeout=5.0)
-
+# Class purpose: Encapsulates the GatewayHarness responsibilities used by this
+#   module.
+# - Project role: Belongs to the operator automation script layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 class GatewayHarness:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on GatewayHarness.
+    # - Inputs: Arguments such as db_path, tcp_port, interpreted according to
+    #   the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
+
     def __init__(self, *, db_path: Path, tcp_port: int) -> None:
         self.queue: asyncio.Queue[TelemetryRecord] = asyncio.Queue(maxsize=1000)
         firmware = load_firmware_config(default_firmware_config_path())
@@ -90,17 +195,60 @@ class GatewayHarness:
             router=self.router,
             settings=TcpIngesterSettings(host="127.0.0.1", port=tcp_port),
         )
+    # Method purpose: Implements the start step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on GatewayHarness.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     async def start(self) -> None:
         self.router.start()
         await self.ingester.start()
+    # Method purpose: Implements the stop step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on GatewayHarness.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     async def stop(self) -> None:
         await self.ingester.stop()
         await self.router.stop()
-
+# Class purpose: Encapsulates the DashboardServer responsibilities used by this
+#   module.
+# - Project role: Belongs to the operator automation script layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 class DashboardServer:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on DashboardServer.
+    # - Inputs: Arguments such as db_path, port, runtime_dir, interpreted
+    #   according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
+
     def __init__(self, *, db_path: Path, port: int, runtime_dir: Path) -> None:
         app = create_app(
             {
@@ -115,14 +263,43 @@ class DashboardServer:
         )
         self.server = make_server("127.0.0.1", port, app)
         self.thread = threading.Thread(target=self.server.serve_forever, name="latency-dashboard", daemon=True)
+    # Method purpose: Implements the start step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on DashboardServer.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     def start(self) -> None:
         self.thread.start()
+    # Method purpose: Implements the stop step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on DashboardServer.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     def stop(self) -> None:
         self.server.shutdown()
         self.thread.join(timeout=5.0)
-
+# Function purpose: Dispatches the top-level script entry point and forwards
+#   command-line arguments into the underlying runtime path.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def main() -> int:
     args = parse_args()
@@ -248,16 +425,46 @@ def main() -> int:
     summary_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2))
     return 0
-
+# Function purpose: Implements the reset path step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as path, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _reset_path(path: Path) -> None:
     if path.exists():
         path.unlink()
-
+# Function purpose: Builds gateway harness for the next stage of the project flow.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as db_path, tcp_port, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns GatewayHarness when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 async def _build_gateway_harness(*, db_path: Path, tcp_port: int) -> GatewayHarness:
     return GatewayHarness(db_path=db_path, tcp_port=tcp_port)
-
+# Function purpose: Implements the wait for http step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as url, timeout_s, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _wait_for_http(url: str, *, timeout_s: float) -> None:
     deadline = time.monotonic() + timeout_s
@@ -268,7 +475,17 @@ def _wait_for_http(url: str, *, timeout_s: float) -> None:
         except urllib.error.URLError:
             time.sleep(0.05)
     raise TimeoutError(f"Timed out waiting for HTTP endpoint {url}")
-
+# Function purpose: Implements the wait for gateway event step used by this
+#   subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as timing_log_path, pod_id, seq, timeout_s,
+#   poll_interval_s, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, Any] when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _wait_for_gateway_event(
     *,
@@ -292,7 +509,18 @@ def _wait_for_gateway_event(
                         return payload
         time.sleep(poll_interval_s)
     raise TimeoutError(f"Timed out waiting for gateway acceptance event pod={pod_id} seq={seq}")
-
+# Function purpose: Implements the wait for database row step used by this
+#   subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as db_path, pod_id, seq, timeout_s, poll_interval_s,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns tuple[dict[str, Any], datetime] when the function completes
+#   successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _wait_for_db_row(
     *,
@@ -322,7 +550,19 @@ def _wait_for_db_row(
                 return dict(row), _utc_now()
         time.sleep(poll_interval_s)
     raise TimeoutError(f"Timed out waiting for SQLite row pod={pod_id} seq={seq}")
-
+# Function purpose: Implements the wait for dashboard visibility step used by this
+#   subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as dashboard_port, pod_id, expected_temp_c,
+#   expected_rh_pct, timeout_s, poll_interval_s, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns tuple[dict[str, Any], datetime] when the function completes
+#   successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _wait_for_dashboard_visibility(
     *,
@@ -350,7 +590,17 @@ def _wait_for_dashboard_visibility(
                 return payload, _utc_now()
         time.sleep(poll_interval_s)
     raise TimeoutError(f"Timed out waiting for dashboard visibility pod={pod_id} temp={expected_temp_c} rh={expected_rh_pct}")
-
+# Function purpose: Writes CSV into the configured destination.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as path, rows, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     if not rows:
@@ -361,26 +611,70 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
-
+# Function purpose: Implements the close enough step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as value, expected, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _close_enough(value: Any, expected: float) -> bool:
     try:
         return abs(float(value) - float(expected)) < 1e-9
     except (TypeError, ValueError):
         return False
-
+# Function purpose: Implements the UTC now step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns datetime when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
-
+# Function purpose: Parses UTC into structured values.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns datetime when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _parse_utc(value: str) -> datetime:
     return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(UTC)
-
+# Function purpose: Implements the iso micro step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _iso_micro(value: datetime) -> str:
     return value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
-
+# Function purpose: Implements the delta ms step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as start, end, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns float when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _delta_ms(start: datetime, end: datetime) -> float:
     return (end - start).total_seconds() * 1000.0

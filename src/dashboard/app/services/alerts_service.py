@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Services for dashboard alert evaluation and acknowledgement
+#   state.
+# - Project role: Builds route-ready view models, chart inputs, and interpretive
+#   summaries from loaded data.
+# - Main data or concerns: View models, chart series, classifications, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
+# - Why this matters: Keeping presentation logic here prevents routes and templates
+#   from reimplementing analysis rules.
+
 """Services for dashboard alert evaluation and acknowledgement state."""
 
 from __future__ import annotations
@@ -9,7 +21,15 @@ from pathlib import Path
 from typing import Iterable
 
 from app.services.thresholds import ClassificationResult, classify_storage_conditions, level_definition
-
+# Class purpose: Alert row shown in the dashboard.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class AlertEntry:
@@ -30,7 +50,18 @@ class AlertEntry:
     recommendation: str
     acknowledged_until: datetime | None
     acknowledged: bool
-
+# Function purpose: Build active, acknowledged, and banner alert views from latest
+#   pod readings.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as latest_readings, acks_file, ack_minutes, now,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def build_alert_snapshot(
     latest_readings: Iterable[object],
@@ -61,7 +92,17 @@ def build_alert_snapshot(
         "alert_banner": banner,
         "ack_minutes": ack_minutes,
     }
-
+# Function purpose: Convert one latest pod reading into an alert row when thresholds
+#   are exceeded.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as reading, acknowledgements, now, interpreted according
+#   to the rules encoded in the body below.
+# - Outputs: Returns AlertEntry | None when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def reading_to_alert(reading: object, acknowledgements: dict[str, datetime], *, now: datetime) -> AlertEntry | None:
     """Convert one latest pod reading into an alert row when thresholds are exceeded."""
@@ -88,12 +129,33 @@ def reading_to_alert(reading: object, acknowledgements: dict[str, datetime], *, 
         acknowledged_until=acknowledged_until,
         acknowledged=acknowledged_until is not None and acknowledged_until > now,
     )
-
+# Function purpose: Create a stable acknowledgement key for a pod's current alert
+#   condition.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as pod_id, classification, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def build_ack_key(pod_id: str, classification: ClassificationResult) -> str:
     """Create a stable acknowledgement key for a pod's current alert condition."""
     return f"{pod_id}|{classification.level}|{classification.description}"
-
+# Function purpose: Return the top-of-page banner summary.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as alerts, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def build_alert_banner(alerts: list[AlertEntry]) -> dict[str, object]:
     """Return the top-of-page banner summary."""
@@ -111,7 +173,17 @@ def build_alert_banner(alerts: list[AlertEntry]) -> dict[str, object]:
         "css_class": definition.css_class,
         "message": f"{count} {pod_word} currently need attention. Worst severity: {definition.label}.",
     }
-
+# Function purpose: Store a temporary acknowledgement for one alert.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as acks_file, ack_key, minutes, now, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def acknowledge_alert(acks_file: Path, ack_key: str, *, minutes: int, now: datetime | None = None) -> None:
     """Store a temporary acknowledgement for one alert."""
@@ -119,7 +191,17 @@ def acknowledge_alert(acks_file: Path, ack_key: str, *, minutes: int, now: datet
     acknowledgements = load_acknowledgements(acks_file, now=current_time)
     acknowledgements[ack_key] = current_time + timedelta(minutes=minutes)
     save_acknowledgements(acks_file, acknowledgements)
-
+# Function purpose: Load acknowledgement expirations from local JSON storage.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as acks_file, now, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns dict[str, datetime] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def load_acknowledgements(acks_file: Path, *, now: datetime | None = None) -> dict[str, datetime]:
     """Load acknowledgement expirations from local JSON storage."""
@@ -140,14 +222,34 @@ def load_acknowledgements(acks_file: Path, *, now: datetime | None = None) -> di
     if len(acknowledgements) != len(payload):
         save_acknowledgements(acks_file, acknowledgements)
     return acknowledgements
-
+# Function purpose: Persist acknowledgement expirations to disk.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as acks_file, acknowledgements, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def save_acknowledgements(acks_file: Path, acknowledgements: dict[str, datetime]) -> None:
     """Persist acknowledgement expirations to disk."""
     ensure_ack_file(acks_file)
     serializable = {key: value.astimezone(timezone.utc).isoformat() for key, value in acknowledgements.items()}
     Path(acks_file).write_text(json.dumps(serializable, indent=2), encoding="utf-8")
-
+# Function purpose: Create the acknowledgement storage file when missing.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as acks_file, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def ensure_ack_file(acks_file: Path) -> None:
     """Create the acknowledgement storage file when missing."""

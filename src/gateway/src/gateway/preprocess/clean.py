@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Raw CSV parsing and sensor-value cleaning for Layer 3
+#   preprocessing.
+# - Project role: Cleans, resamples, derives, or exports telemetry into
+#   analysis-ready forms.
+# - Main data or concerns: Time-series points, derived psychrometric variables, and
+#   resampled grids.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
+# - Why this matters: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+
 """Raw CSV parsing and sensor-value cleaning for Layer 3 preprocessing."""
 
 from __future__ import annotations
@@ -10,7 +22,15 @@ from typing import Iterable
 
 from gateway.storage.schema import QualityFlag, parse_quality_mask
 from gateway.utils.timeutils import parse_utc_iso
-
+# Class purpose: Typed view over one canonical raw telemetry CSV row.
+# - Project role: Belongs to the gateway preprocessing layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 @dataclass(frozen=True)
 class RawSampleRow:
@@ -25,7 +45,15 @@ class RawSampleRow:
     flags: int
     rssi: int | None
     quality_flags: int
-
+# Class purpose: Validated sensor row ready for resampling.
+# - Project role: Belongs to the gateway preprocessing layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 @dataclass(frozen=True)
 class CleanSampleRow:
@@ -37,7 +65,17 @@ class CleanSampleRow:
     temp_c_clean: float | None
     rh_pct_clean: float | None
     quality_flags: int
-
+# Function purpose: Coerces optional float into the type expected by downstream
+#   code.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Rejects malformed or incompatible input early so later code
+#   can assume typed values rather than repeating the same checks.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _coerce_optional_float(value: str | None) -> float | None:
     if value is None:
@@ -46,7 +84,16 @@ def _coerce_optional_float(value: str | None) -> float | None:
     if not text:
         return None
     return float(text)
-
+# Function purpose: Coerces optional int into the type expected by downstream code.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int | None when the function completes successfully.
+# - Important decisions: Rejects malformed or incompatible input early so later code
+#   can assume typed values rather than repeating the same checks.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def _coerce_optional_int(value: str | None) -> int | None:
     if value is None:
@@ -55,7 +102,17 @@ def _coerce_optional_int(value: str | None) -> int | None:
     if not text:
         return None
     return int(text)
-
+# Function purpose: Load a canonical raw telemetry file into typed records.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as path, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns list[RawSampleRow] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def read_raw_samples(path: Path) -> list[RawSampleRow]:
     """Load a canonical raw telemetry file into typed records."""
@@ -77,7 +134,17 @@ def read_raw_samples(path: Path) -> list[RawSampleRow]:
             )
     rows.sort(key=lambda item: item.ts_pc_utc)
     return rows
-
+# Function purpose: Enforce numeric types and range checks without dropping audit
+#   context.
+# - Project role: Belongs to the gateway preprocessing layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as rows, temp_min_c, temp_max_c, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns list[CleanSampleRow] when the function completes successfully.
+# - Important decisions: Forecasting and dashboard analysis both depend on
+#   preprocessing rules staying reproducible.
+# - Related flow: Consumes raw or normalized telemetry and passes transformed
+#   outputs to forecasting or export steps.
 
 def clean_samples(
     rows: Iterable[RawSampleRow],

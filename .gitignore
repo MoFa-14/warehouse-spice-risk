@@ -9,10 +9,6 @@ route_smoke_tmp_root/
 temp_sandbox_check/
 verification_temp/
 
-# The old nested repository metadata is kept only as a local safety backup while
-# the full project is tracked from the outer repository root.
-src/.git-src-backup/
-
 # Temporary test artefacts that live inside the former nested repo root.
 src/.tmp-tests/
 src/.tmp-tests-ui/

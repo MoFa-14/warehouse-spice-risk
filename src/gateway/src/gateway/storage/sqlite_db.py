@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: SQLite connection helpers, pragmas, and schema initialization.
+# - Project role: Stores raw telemetry, link diagnostics, and exportable datasets in
+#   canonical formats.
+# - Main data or concerns: SQLite rows, CSV rows, schema definitions, and storage
+#   paths.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
+# - Why this matters: Persistence code matters because the rest of the project only
+#   sees what this layer records and exposes.
+
 """SQLite connection helpers, pragmas, and schema initialization."""
 
 from __future__ import annotations
@@ -56,7 +67,17 @@ OTHER_SCHEMA_STATEMENTS = (
     )
     """,
 )
-
+# Function purpose: Resolve the telemetry database path, defaulting to
+#   data/db/telemetry.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as path, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns Path when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def resolve_db_path(path: Path | str | None = None) -> Path:
     """Resolve the telemetry database path, defaulting to data/db/telemetry.sqlite."""
@@ -66,7 +87,16 @@ def resolve_db_path(path: Path | str | None = None) -> Path:
     if candidate.is_absolute():
         return candidate
     return build_storage_paths().root.parent / candidate
-
+# Function purpose: Open a SQLite connection with the gateway pragmas applied.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as db_path, readonly, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns sqlite3.Connection when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def connect_sqlite(db_path: Path | str | None = None, *, readonly: bool = False) -> sqlite3.Connection:
     """Open a SQLite connection with the gateway pragmas applied."""
@@ -83,7 +113,16 @@ def connect_sqlite(db_path: Path | str | None = None, *, readonly: bool = False)
     connection.row_factory = sqlite3.Row
     _apply_pragmas(connection, readonly=readonly)
     return connection
-
+# Function purpose: Create the telemetry database file and initialize the schema.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as db_path, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns Path when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def init_db(db_path: Path | str | None = None) -> Path:
     """Create the telemetry database file and initialize the schema."""
@@ -94,7 +133,17 @@ def init_db(db_path: Path | str | None = None) -> Path:
     finally:
         connection.close()
     return resolved_path
-
+# Function purpose: Create tables and indexes if they do not already exist.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def initialize_schema(connection: sqlite3.Connection) -> None:
     """Create tables and indexes if they do not already exist."""
@@ -103,7 +152,17 @@ def initialize_schema(connection: sqlite3.Connection) -> None:
     for statement in OTHER_SCHEMA_STATEMENTS:
         connection.execute(statement)
     connection.commit()
-
+# Function purpose: Applies pragmas to the provided state or data.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, readonly, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _apply_pragmas(connection: sqlite3.Connection, *, readonly: bool) -> None:
     connection.execute("PRAGMA busy_timeout=5000")
@@ -119,7 +178,18 @@ def _apply_pragmas(connection: sqlite3.Connection, *, readonly: bool) -> None:
 
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("PRAGMA synchronous=NORMAL")
-
+# Function purpose: Ensures that samples raw schema exists before later logic
+#   depends on it.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _ensure_samples_raw_schema(connection: sqlite3.Connection) -> None:
     if not _table_exists(connection, "samples_raw"):
@@ -169,7 +239,16 @@ def _ensure_samples_raw_schema(connection: sqlite3.Connection) -> None:
     connection.execute("ALTER TABLE samples_raw_v2 RENAME TO samples_raw")
     for statement in SAMPLES_RAW_INDEXES:
         connection.execute(statement)
-
+# Function purpose: Implements the table exists step used by this subsystem.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, table_name, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
     row = connection.execute(
@@ -177,7 +256,19 @@ def _table_exists(connection: sqlite3.Connection, table_name: str) -> bool:
         (str(table_name),),
     ).fetchone()
     return row is not None
-
+# Function purpose: Normalizes backfill session ids into the subsystem's stable
+#   representation.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _normalize_backfill_session_ids(connection: sqlite3.Connection) -> None:
     if not _table_exists(connection, "samples_raw"):

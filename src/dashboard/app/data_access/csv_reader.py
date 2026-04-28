@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Pandas CSV readers shared by dashboard services.
+# - Project role: Loads persisted telemetry, forecast, or evaluation data into
+#   stable dashboard-facing tables.
+# - Main data or concerns: Telemetry rows, forecast rows, evaluation rows, and date
+#   or pod filters.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
+# - Why this matters: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+
 """Pandas CSV readers shared by dashboard services."""
 
 from __future__ import annotations
@@ -45,7 +56,17 @@ LINK_COLUMNS = [
     "reconnect_count",
     "missing_rate",
 ]
-
+# Function purpose: Read raw telemetry CSV files into one normalized dataframe.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as paths, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def read_raw_samples(paths: Iterable[Path]) -> pd.DataFrame:
     """Read raw telemetry CSV files into one normalized dataframe."""
@@ -55,7 +76,17 @@ def read_raw_samples(paths: Iterable[Path]) -> pd.DataFrame:
         numeric_columns=["seq", "ts_uptime_s", "temp_c", "rh_pct", "dew_point_c", "flags", "rssi", "quality_flags"],
     )
     return _fill_missing_raw_dew_point(dataframe)
-
+# Function purpose: Read processed daily CSV files into one normalized dataframe.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as paths, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def read_processed_samples(paths: Iterable[Path]) -> pd.DataFrame:
     """Read processed daily CSV files into one normalized dataframe."""
@@ -64,7 +95,17 @@ def read_processed_samples(paths: Iterable[Path]) -> pd.DataFrame:
         PROCESSED_COLUMNS,
         numeric_columns=["temp_c_clean", "rh_pct_clean", "dew_point_c", "missing", "interpolated", "source_seq"],
     )
-
+# Function purpose: Read link-quality CSV files into one normalized dataframe.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as paths, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def read_link_quality(paths: Iterable[Path]) -> pd.DataFrame:
     """Read link-quality CSV files into one normalized dataframe."""
@@ -82,7 +123,17 @@ def read_link_quality(paths: Iterable[Path]) -> pd.DataFrame:
             "missing_rate",
         ],
     )
-
+# Function purpose: Reads csvs from the relevant storage or runtime source.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as paths, columns, numeric_columns, interpreted according
+#   to the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _read_csvs(paths: Iterable[Path], columns: list[str], *, numeric_columns: list[str]) -> pd.DataFrame:
     normalized_paths = [Path(path) for path in paths]
@@ -116,7 +167,17 @@ def _read_csvs(paths: Iterable[Path], columns: list[str], *, numeric_columns: li
     for column in numeric_columns:
         dataframe[column] = pd.to_numeric(dataframe[column], errors="coerce")
     return dataframe
-
+# Function purpose: Implements the fill missing raw dew point step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as dataframe, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _fill_missing_raw_dew_point(dataframe: pd.DataFrame) -> pd.DataFrame:
     if dataframe.empty or "dew_point_c" not in dataframe.columns:
@@ -132,13 +193,34 @@ def _fill_missing_raw_dew_point(dataframe: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     return dataframe
-
+# Function purpose: Reads pod identifier from the relevant storage or runtime
+#   source.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _read_pod_id(value) -> str:
     if value is None:
         return ""
     return str(value).strip()
-
+# Function purpose: Implements the dew point c step used by this subsystem.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as temp_c, rh_pct, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _dew_point_c(temp_c, rh_pct):
     if pd.isna(temp_c) or pd.isna(rh_pct):

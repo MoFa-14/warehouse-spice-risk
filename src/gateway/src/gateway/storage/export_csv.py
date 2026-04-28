@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Export SQLite-backed telemetry into CSV files for reporting or
+#   appendices.
+# - Project role: Stores raw telemetry, link diagnostics, and exportable datasets in
+#   canonical formats.
+# - Main data or concerns: SQLite rows, CSV rows, schema definitions, and storage
+#   paths.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
+# - Why this matters: Persistence code matters because the rest of the project only
+#   sees what this layer records and exposes.
+
 """Export SQLite-backed telemetry into CSV files for reporting or appendices."""
 
 from __future__ import annotations
@@ -25,7 +37,16 @@ EXPORT_COLUMNS = [
     "quality_flags",
     "source",
 ]
-
+# Function purpose: Export one pod's raw rows from SQLite into a CSV file.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as pod_id, date_from, date_to, out_path, db_path,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns Path when the function completes successfully.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def export_pod_csv(
     *,
@@ -44,7 +65,16 @@ def export_pod_csv(
     rows = samples_in_range(db_path=db_path, pod_id=pod_id, ts_from_utc=ts_from_utc, ts_to_utc=ts_to_utc)
     _write_rows(destination, rows)
     return destination
-
+# Function purpose: Export one CSV per pod for the requested UTC date range.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as date_from, date_to, out_dir, db_path, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def export_all_pods_csv(
     *,
@@ -70,7 +100,17 @@ def export_all_pods_csv(
         _write_rows(destination, pod_rows)
         outputs.append(destination)
     return outputs
-
+# Function purpose: Writes rows into the configured destination.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as path, rows, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _write_rows(path: Path, rows: Iterable[dict[str, object]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
@@ -78,7 +118,16 @@ def _write_rows(path: Path, rows: Iterable[dict[str, object]]) -> None:
         writer.writeheader()
         for row in rows:
             writer.writerow(_export_row(row))
-
+# Function purpose: Exports row into the external format used by later tools.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as row, interpreted according to the rules encoded in the
+#   body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _export_row(row: dict[str, object]) -> dict[str, object]:
     temp_c = _coerce_float(row.get("temp_c"))
@@ -97,7 +146,16 @@ def _export_row(row: dict[str, object]) -> dict[str, object]:
         "quality_flags": row.get("quality_flags", ""),
         "source": row.get("source", ""),
     }
-
+# Function purpose: Coerces float into the type expected by downstream code.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Rejects malformed or incompatible input early so later code
+#   can assume typed values rather than repeating the same checks.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _coerce_float(value: object) -> float | None:
     if value is None:

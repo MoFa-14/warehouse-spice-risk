@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Dashboard-side telemetry calibration and optional chart
+#   smoothing.
+# - Project role: Builds route-ready view models, chart inputs, and interpretive
+#   summaries from loaded data.
+# - Main data or concerns: View models, chart series, classifications, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
+# - Why this matters: Keeping presentation logic here prevents routes and templates
+#   from reimplementing analysis rules.
+
 """Dashboard-side telemetry calibration and optional chart smoothing."""
 
 from __future__ import annotations
@@ -8,7 +20,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
-
+# Class purpose: Per-pod calibration offsets applied on read paths only.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class PodCalibration:
@@ -16,7 +36,15 @@ class PodCalibration:
 
     temp_offset_c: float = 0.0
     rh_offset_pct: float = 0.0
-
+# Class purpose: Optional rolling smoothing for chart-friendly series.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class SmoothingSettings:
@@ -25,7 +53,15 @@ class SmoothingSettings:
     enabled: bool = False
     method: str = "rolling_mean"
     window: int = 3
-
+# Class purpose: Resolved dashboard adjustment settings.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class TelemetryAdjustments:
@@ -34,11 +70,33 @@ class TelemetryAdjustments:
     default: PodCalibration = PodCalibration()
     pods: dict[str, PodCalibration] | None = None
     dashboard_smoothing: SmoothingSettings = SmoothingSettings()
+    # Method purpose: Implements the calibration for pod step used by this
+    #   subsystem.
+    # - Project role: Belongs to the dashboard service and presentation layer
+    #   and acts as a method on TelemetryAdjustments.
+    # - Inputs: Arguments such as pod_id, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns PodCalibration when the function completes
+    #   successfully.
+    # - Important decisions: Keeping presentation logic here prevents routes and
+    #   templates from reimplementing analysis rules.
+    # - Related flow: Consumes dashboard data-access outputs and passes rendered
+    #   context to routes and templates.
 
     def calibration_for_pod(self, pod_id: str) -> PodCalibration:
         pod_overrides = self.pods or {}
         return pod_overrides.get(str(pod_id), self.default)
-
+# Function purpose: Load optional telemetry adjustment settings from JSON.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as path, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns TelemetryAdjustments when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def load_adjustments(path: Path | str | None) -> TelemetryAdjustments:
     """Load optional telemetry adjustment settings from JSON."""
@@ -60,7 +118,17 @@ def load_adjustments(path: Path | str | None) -> TelemetryAdjustments:
         pods=pods,
         dashboard_smoothing=_parse_smoothing(payload.get("dashboard_smoothing")),
     )
-
+# Function purpose: Apply per-pod calibration without mutating persisted raw
+#   storage.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, temp_column, rh_column, dew_column, pod_column,
+#   adjustments, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def apply_calibration(
     frame: pd.DataFrame,
@@ -92,7 +160,16 @@ def apply_calibration(
         axis=1,
     )
     return adjusted
-
+# Function purpose: Apply optional rolling smoothing to dashboard chart series.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, value_columns, ts_column, pod_column, settings,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def apply_smoothing(
     frame: pd.DataFrame,
@@ -119,7 +196,16 @@ def apply_smoothing(
         smoothed_groups.append(smoothed)
 
     return pd.concat(smoothed_groups, ignore_index=True) if smoothed_groups else frame
-
+# Function purpose: Recompute dew point from the active temperature and RH columns.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, temp_column, rh_column, dew_column, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def recompute_dew_point(
     frame: pd.DataFrame,
@@ -137,7 +223,16 @@ def recompute_dew_point(
         axis=1,
     )
     return updated
-
+# Function purpose: Parses calibration into structured values.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as payload, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns PodCalibration when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _parse_calibration(payload: object) -> PodCalibration:
     if not isinstance(payload, dict):
@@ -146,7 +241,16 @@ def _parse_calibration(payload: object) -> PodCalibration:
         temp_offset_c=float(payload.get("temp_offset_c") or 0.0),
         rh_offset_pct=float(payload.get("rh_offset_pct") or 0.0),
     )
-
+# Function purpose: Parses smoothing into structured values.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as payload, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns SmoothingSettings when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _parse_smoothing(payload: object) -> SmoothingSettings:
     if not isinstance(payload, dict):
@@ -157,7 +261,17 @@ def _parse_smoothing(payload: object) -> SmoothingSettings:
         method=str(payload.get("method") or "rolling_mean").strip().lower(),
         window=max(1, window),
     )
-
+# Function purpose: Implements the dew point c step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as temp_c, rh_pct, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _dew_point_c(temp_c, rh_pct):
     if pd.isna(temp_c) or pd.isna(rh_pct):

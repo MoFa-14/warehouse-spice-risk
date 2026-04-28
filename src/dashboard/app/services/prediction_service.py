@@ -1,14 +1,28 @@
+# File overview:
+# - Responsibility: Dashboard services for rendering stored forecasts.
+# - Project role: Builds route-ready view models, summaries, and chart inputs from
+#   loaded data.
+# - Main data or concerns: View models, chart series, thresholds, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 """Dashboard services for rendering stored forecasts.
 
-This module is the presentation-layer companion to the forecasting pipeline.
-The gateway and ML packages generate and store forecasts; this file turns those
-stored artefacts into human-readable dashboard views.
+Responsibilities:
+- Turns stored forecast and evaluation artefacts into dashboard-ready view
+  objects and Plotly charts.
+- Connects the forecast archive to the prediction page, per-pod detail view,
+  and historical forecast-test card.
 
-In viva terms, this is where the project answers questions like:
-- "What is the latest forecast for each pod?"
-- "How should the user interpret baseline vs event-persist?"
-- "How is forecast skill against persistence shown in the interface?"
-- "How does the dashboard expose a historical test case for explanation?"
+Project flow:
+- stored forecasts/evaluations -> dashboard view models -> summary cards,
+  scenario explanations, and interactive charts
+
+Why this matters:
+- Forecasts are generated and stored upstream, but their operational meaning is
+  communicated here through grouped scenarios, chart annotations, and summary
+  text.
 """
 
 from __future__ import annotations
@@ -42,6 +56,16 @@ EVENT_TEMP_BAND_C = 0.30
 EVENT_RH_BAND_PCT = 1.50
 
 
+# Class purpose: Compact evaluation summary attached to one displayed scenario.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 @dataclass(frozen=True)
 class PredictionEvaluationView:
     """Compact evaluation summary attached to one displayed scenario."""
@@ -52,6 +76,16 @@ class PredictionEvaluationView:
     large_error: bool
     notes: str
 
+
+# Class purpose: Dashboard-ready representation of one forecast scenario.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 @dataclass(frozen=True)
 class PredictionScenarioView:
@@ -86,6 +120,17 @@ class PredictionScenarioView:
     evaluation: PredictionEvaluationView | None
 
 
+# Class purpose: Small card shown beneath each forecast plot to make the forecast
+#   easier to explain.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 @dataclass(frozen=True)
 class PredictionMetricSummaryCardView:
     """Small card shown beneath each forecast plot to make the forecast easier to explain."""
@@ -99,6 +144,16 @@ class PredictionMetricSummaryCardView:
     peak_value: str
     delta_value: str
 
+
+# Class purpose: Full dashboard prediction view for one pod.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 @dataclass(frozen=True)
 class PodPredictionView:
@@ -121,10 +176,40 @@ class PodPredictionView:
     rh_summary_cards: tuple[PredictionMetricSummaryCardView, ...] = ()
     dew_summary_cards: tuple[PredictionMetricSummaryCardView, ...] = ()
 
+    # Method purpose: Handles chart for the surrounding project flow.
+    # - Project role: Belongs to the dashboard service and presentation layer
+    #   and acts as a method on PodPredictionView.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns str | None when the function completes successfully.
+    # - Design reason: Service-layer code keeps presentation decisions separate
+    #   from raw data loading and lower-level runtime logic.
+    # - Related flow: Consumes dashboard data-access outputs and passes rendered
+    #   context to the Flask routes and templates.
+
     @property
     def accuracy_chart(self) -> str | None:
         return self.comparison_chart
 
+
+# Prediction-page context builder
+# - Purpose: assembles all data required by the main prediction page.
+# - Project role: top-level dashboard service entry point for the forecast
+#   presentation path.
+# - Inputs: forecast storage root, optional database path, selected pod, chosen
+#   historical test attempt, and display timezone.
+# - Outputs: page context containing grouped per-pod forecast views, the
+#   selected detailed forecast view, and the historical Pod 1 test card.
+# Function purpose: Build the full prediction page context.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, selected_pod_id,
+#   selected_test_attempt_ts, display_timezone, interpreted according to the
+#   implementation below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def build_prediction_page_context(
     data_root: Path,
@@ -134,13 +219,7 @@ def build_prediction_page_context(
     selected_test_attempt_ts: str | None = None,
     display_timezone: tzinfo | None = None,
 ) -> dict[str, object]:
-    """Build the full prediction page context.
-
-    This is the top-level service used by the prediction page route. It combines:
-    - the latest stored forecasts for all pods
-    - evaluation history for the persistence-comparison chart
-    - the separate historical ``Pod 1 Forecasting Test`` card
-    """
+    """Build the full prediction page context."""
     frame = read_latest_forecasts(Path(data_root), db_path=db_path)
     evaluation_history = read_evaluation_history(Path(data_root), db_path=db_path, scenario="baseline")
     resolved_display_timezone = display_timezone or timezone.utc
@@ -183,6 +262,22 @@ def build_prediction_page_context(
     }
 
 
+# Per-pod prediction context
+# - Purpose: loads the latest stored forecast context for one pod.
+# - Project role: detail-page service entry point when the UI focuses on a
+#   single device rather than the multi-pod summary page.
+# Function purpose: Build the latest forecast context for a single pod detail page.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, db_path, display_timezone,
+#   interpreted according to the implementation below.
+# - Outputs: Returns PodPredictionView | None when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def build_pod_prediction_context(
     data_root: Path,
     pod_id: str,
@@ -204,6 +299,28 @@ def build_pod_prediction_context(
     return predictions[0] if predictions else None
 
 
+# Stored-row to view-model conversion
+# - Purpose: groups stored scenario rows into the dashboard's per-pod forecast
+#   view objects.
+# - Project role: main transformation stage between forecast-access tables and
+#   rendered dashboard content.
+# - Important decisions:
+#   - baseline is the required anchor scenario for each pod
+#   - event-persist remains optional and may be reconstructed only for display
+#   - heavy chart generation is limited to the requested pod set
+# Function purpose: Convert stored forecast rows into dashboard view objects.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, data_root, db_path, evaluation_history,
+#   include_charts_for, display_timezone, interpreted according to the
+#   implementation below.
+# - Outputs: Returns list[PodPredictionView] when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _build_predictions(
     frame: pd.DataFrame,
     *,
@@ -213,11 +330,7 @@ def _build_predictions(
     include_charts_for: set[str],
     display_timezone: tzinfo,
 ) -> list[PodPredictionView]:
-    """Convert stored forecast rows into dashboard view objects.
-
-    This is where the dashboard decides which stored rows belong together as one
-    pod forecast view and whether enough context exists to also build charts.
-    """
+    """Convert stored forecast rows into dashboard view objects."""
     if frame.empty:
         return []
 
@@ -316,11 +429,35 @@ def _build_predictions(
     return views
 
 
+# Function purpose: Prioritizes predictions for the surrounding project flow.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as predictions, selected_pod_id, interpreted according to
+#   the implementation below.
+# - Outputs: Returns list[PodPredictionView] when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _prioritize_predictions(predictions: list[PodPredictionView], selected_pod_id: str) -> list[PodPredictionView]:
     selected = [item for item in predictions if item.pod_id == selected_pod_id]
     remaining = [item for item in predictions if item.pod_id != selected_pod_id]
     return selected + remaining
 
+
+# Function purpose: Return the first stored row for a requested scenario within one
+#   pod frame.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as frame, scenario, interpreted according to the
+#   implementation below.
+# - Outputs: Returns the value or side effect defined by the implementation.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _scenario_row(frame: pd.DataFrame, scenario: str):
     """Return the first stored row for a requested scenario within one pod frame."""
@@ -330,13 +467,30 @@ def _scenario_row(frame: pd.DataFrame, scenario: str):
     return rows.iloc[0]
 
 
-def _scenario_view(row) -> PredictionScenarioView:
-    """Convert one stored forecast row into a dashboard-friendly scenario view.
+# Scenario view construction
+# - Purpose: expands one stored scenario row into the richer object used by the
+#   prediction templates.
+# - Project role: presentation preparation stage for one baseline or
+#   event-persist scenario.
+# - Inputs: one stored forecast row with embedded JSON payloads and optional
+#   evaluation fields.
+# - Outputs: ``PredictionScenarioView`` with anchor values, peak analysis,
+#   summary copy, risk classification, and evaluation snippets.
+# Function purpose: Convert one stored forecast row into a dashboard-friendly
+#   scenario view.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as row, interpreted according to the implementation
+#   below.
+# - Outputs: Returns PredictionScenarioView when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
-    This function is where raw stored JSON becomes the richer objects used by
-    the templates: anchor values, peaks, summary text, status classification,
-    and evaluation snippets are all derived here.
-    """
+def _scenario_view(row) -> PredictionScenarioView:
+    """Convert one stored forecast row into a dashboard-friendly scenario view."""
     if row is None:
         raise ValueError("Cannot build scenario view from an empty row.")
     forecast = json.loads(row["json_forecast"])
@@ -345,15 +499,15 @@ def _scenario_view(row) -> PredictionScenarioView:
     temp_forecast_c = [float(value) for value in forecast["temp_forecast_c"]]
     rh_forecast_pct = [float(value) for value in forecast["rh_forecast_pct"]]
     dew_forecast_c = [float(value) for value in (forecast.get("dew_point_forecast_c") or [])]
-    # The dashboard classifies the predicted storage trajectory so the user sees
-    # not only the raw line but also what that line means in storage-risk terms.
+    # The predicted storage classification turns the raw path into a risk-aware
+    # interpretation layer that the templates can summarise directly.
     predicted_status = classify_storage_trajectory(temp_forecast_c, rh_forecast_pct)
     features = forecast.get("feature_vector") or {}
     temp_start_c = float(features.get("temp_last") or 0.0)
     rh_start_pct = float(features.get("rh_last") or 0.0)
     dew_start_c = _dew_point_anchor(features=features, temp_start_c=temp_start_c, rh_start_pct=rh_start_pct)
-    # Dew point is stored when available, but a safe anchor fallback is kept so
-    # older rows remain displayable.
+    # Dew point is stored when available, but a deterministic anchor fallback is
+    # kept so older rows remain displayable without schema-specific branching.
     if not dew_forecast_c:
         dew_forecast_c = [dew_start_c for _ in temp_forecast_c]
     temp_peak_c, temp_peak_minute = _peak_point(temp_forecast_c)
@@ -421,6 +575,26 @@ def _scenario_view(row) -> PredictionScenarioView:
     )
 
 
+# Forecast chart builder
+# - Purpose: renders the interactive baseline and optional event-persist chart
+#   for one metric.
+# - Project role: final presentation stage after scenario view construction.
+# - Important decisions:
+#   - the first point is always the latest observed anchor
+#   - uncertainty bands are shown for temperature and RH but not for dew point
+#   - event-persist is visually differentiated as an alternate scenario
+# Function purpose: Build one interactive forecast chart for temperature, RH, or dew
+#   point.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as ts_pc_utc, baseline, alternate, metric,
+#   display_timezone, interpreted according to the implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _build_forecast_chart(
     *,
     ts_pc_utc: datetime,
@@ -429,17 +603,12 @@ def _build_forecast_chart(
     metric: str,
     display_timezone: tzinfo,
 ) -> str:
-    """Build one interactive forecast chart for temperature, RH, or dew point.
-
-    The first plotted point is always the latest observed anchor. The forward
-    points after that are forecast values. This makes the transition from
-    observed state to predicted state visually explicit for the user.
-    """
+    """Build one interactive forecast chart for temperature, RH, or dew point."""
     times = [to_display_time(ts_pc_utc + timedelta(minutes=index), display_timezone) for index in range(31)]
     figure = go.Figure()
 
-    # Each metric reuses the same chart structure, but the labels, colours, and
-    # uncertainty handling differ slightly so the plot remains readable.
+    # Each metric reuses the same chart structure, but labels, colours, and
+    # uncertainty handling differ so the combined page remains readable.
     if metric == "temp":
         anchor = baseline.temp_start_c
         baseline_mid = [anchor] + baseline.temp_forecast_c
@@ -536,14 +705,26 @@ def _build_forecast_chart(
     return figure.to_html(full_html=False, include_plotlyjs=False, config=_plotly_chart_config())
 
 
-def _build_persistence_comparison_chart(*, evaluation_history: pd.DataFrame, display_timezone: tzinfo) -> str | None:
-    """Build the per-window model-vs-persistence comparison chart.
+# Persistence-comparison chart
+# - Purpose: visualises how model RMSE compares with a flat persistence baseline
+#   across completed forecast attempts.
+# - Project role: dashboard evidence view for historical forecast skill.
+# - Important decision: uses per-window RMSE advantage instead of a cumulative
+#   or first-window-normalised measure, so each plotted point stands on its own
+#   forecast outcome.
+# Function purpose: Build the per-window model-vs-persistence comparison chart.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as evaluation_history, display_timezone, interpreted
+#   according to the implementation below.
+# - Outputs: Returns str | None when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
-    This chart replaced the older misleading "improvement over time" logic that
-    used the first-ever RMSE as a denominator. The current chart instead shows
-    per-window RMSE advantage relative to persistence, which is easier to defend
-    and explain.
-    """
+def _build_persistence_comparison_chart(*, evaluation_history: pd.DataFrame, display_timezone: tzinfo) -> str | None:
+    """Build the per-window model-vs-persistence comparison chart."""
     if evaluation_history.empty:
         return None
 
@@ -627,6 +808,18 @@ def _build_persistence_comparison_chart(*, evaluation_history: pd.DataFrame, dis
     return figure.to_html(full_html=False, include_plotlyjs=False, config=_plotly_chart_config())
 
 
+# Function purpose: Add a translucent uncertainty band between lower and upper
+#   scenario bounds.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as figure, times, lower, upper, color, label, opacity,
+#   interpreted according to the implementation below.
+# - Outputs: Returns None when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _add_band_trace(
     figure: go.Figure,
     times: list[datetime],
@@ -662,6 +855,18 @@ def _add_band_trace(
     )
 
 
+# Function purpose: Convert a hex colour into an rgba string for Plotly fill
+#   styling.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as hex_color, opacity, interpreted according to the
+#   implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _alpha(hex_color: str, opacity: float) -> str:
     """Convert a hex colour into an rgba string for Plotly fill styling."""
     value = hex_color.lstrip("#")
@@ -670,6 +875,17 @@ def _alpha(hex_color: str, opacity: float) -> str:
     blue = int(value[4:6], 16)
     return f"rgba({red}, {green}, {blue}, {opacity})"
 
+
+# Function purpose: Return per-window RMSE advantage over persistence.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as model_rmse, persistence_rmse, interpreted according to
+#   the implementation below.
+# - Outputs: Returns pd.Series when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _rmse_advantage_series(*, model_rmse: pd.Series, persistence_rmse: pd.Series) -> pd.Series:
     """Return per-window RMSE advantage over persistence.
@@ -681,6 +897,22 @@ def _rmse_advantage_series(*, model_rmse: pd.Series, persistence_rmse: pd.Series
         return pd.Series(dtype="float64")
     return persistence_rmse.astype(float) - model_rmse.astype(float)
 
+
+# Metric summary-card builder
+# - Purpose: creates the compact text cards that summarise scenario behaviour
+#   beneath each forecast chart.
+# - Outputs: one baseline card and, when present, one event-persist card.
+# Function purpose: Create the text cards shown beneath each forecast chart.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, baseline, alternate, event_type, interpreted
+#   according to the implementation below.
+# - Outputs: Returns tuple[PredictionMetricSummaryCardView, ...] when the function
+#   completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _build_metric_summary_cards(
     *,
@@ -711,6 +943,22 @@ def _build_metric_summary_cards(
         )
     return tuple(cards)
 
+
+# Single summary-card builder
+# - Purpose: turns one scenario and one metric into a compact dashboard card
+#   containing the headline, supporting line, and key numeric markers.
+# Function purpose: Build one chart-level summary card in the more readable UI
+#   format.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, scenario, scenario_key, scenario_label,
+#   event_type, interpreted according to the implementation below.
+# - Outputs: Returns PredictionMetricSummaryCardView when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _metric_summary_card(
     *,
@@ -752,6 +1000,19 @@ def _metric_summary_card(
     )
 
 
+# Function purpose: Extract start/end/peak values for one metric from a scenario
+#   view.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, scenario, interpreted according to the
+#   implementation below.
+# - Outputs: Returns tuple[float, float, float, int] when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _metric_points(*, metric: str, scenario: PredictionScenarioView) -> tuple[float, float, float, int]:
     """Extract start/end/peak values for one metric from a scenario view."""
     if metric == "temp":
@@ -760,6 +1021,18 @@ def _metric_points(*, metric: str, scenario: PredictionScenarioView) -> tuple[fl
         return scenario.rh_start_pct, scenario.rh_end_pct, scenario.rh_peak_pct, scenario.rh_peak_minute
     return scenario.dew_start_c, scenario.dew_end_c, scenario.dew_peak_c, scenario.dew_peak_minute
 
+
+# Function purpose: Write the short plain-language headline for a metric summary
+#   card.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, scenario_key, start, end, peak, event_type,
+#   interpreted according to the implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _metric_headline(
     *,
@@ -801,6 +1074,18 @@ def _metric_headline(
     return "Temperature stays close to the current anchor point."
 
 
+# Function purpose: Write the supporting sentence that explains source, endpoint,
+#   and risk.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, scenario, scenario_key, end, peak,
+#   peak_minute, interpreted according to the implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _metric_supporting_line(
     *,
     metric: str,
@@ -834,6 +1119,18 @@ def _metric_supporting_line(
     )
 
 
+# Function purpose: Classify a metric change as up, down, or steady for dashboard
+#   copy.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, delta, interpreted according to the
+#   implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _direction_label(*, metric: str, delta: float) -> str:
     """Classify a metric change as up, down, or steady for dashboard copy."""
     threshold = 0.8 if metric == "rh" else 0.2
@@ -844,17 +1141,56 @@ def _direction_label(*, metric: str, delta: float) -> str:
     return "steady"
 
 
+# Function purpose: Formats metric value for the surrounding project flow.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, value, interpreted according to the
+#   implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _format_metric_value(metric: str, value: float) -> str:
     if metric == "rh":
         return f"{value:.2f}%"
     return f"{value:.2f} C"
 
 
+# Function purpose: Formats metric delta for the surrounding project flow.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as metric, delta, interpreted according to the
+#   implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _format_metric_delta(metric: str, delta: float) -> str:
     if metric == "rh":
         return f"{delta:+.2f}% vs now"
     return f"{delta:+.2f} C vs now"
 
+
+# Display-only event-persist reconstruction
+# - Purpose: recreates an event-persist scenario only for presentation when an
+#   older stored forecast row did not include that alternate payload.
+# - Project role: dashboard compatibility bridge for legacy forecast records.
+# Function purpose: Reconstruct a display-only event-persist scenario from recent
+#   raw history.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, pod_id, ts_pc_utc, baseline,
+#   event_type, interpreted according to the implementation below.
+# - Outputs: Returns PredictionScenarioView | None when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _build_display_event_persist_scenario(
     *,
@@ -865,11 +1201,7 @@ def _build_display_event_persist_scenario(
     baseline: PredictionScenarioView,
     event_type: str,
 ) -> PredictionScenarioView | None:
-    """Reconstruct a display-only event-persist scenario from recent raw history.
-
-    This exists mainly for backward compatibility with older stored forecast
-    rows that did not include an alternate scenario payload.
-    """
+    """Reconstruct a display-only event-persist scenario from recent raw history."""
     history = _load_recent_raw_history(
         data_root=data_root,
         db_path=db_path,
@@ -886,18 +1218,31 @@ def _build_display_event_persist_scenario(
     )
 
 
+# Presentation-side event-persist builder
+# - Purpose: rebuilds an event-persist scenario from recent raw readings for
+#   dashboard explanation only.
+# - Important distinction: this path does not replace stored model output; it is
+#   used only when an older forecast row lacks an alternate scenario.
+# Function purpose: Build a dashboard-only event-persist scenario from recent raw
+#   readings.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as history_frame, baseline, event_type, interpreted
+#   according to the implementation below.
+# - Outputs: Returns PredictionScenarioView | None when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _event_persist_from_history_frame(
     *,
     history_frame: pd.DataFrame,
     baseline: PredictionScenarioView,
     event_type: str,
 ) -> PredictionScenarioView | None:
-    """Build a dashboard-only event-persist scenario from recent raw readings.
-
-    This is not the main forecasting pipeline path. It is a presentation-side
-    reconstruction used so the dashboard can still explain what an event-persist
-    slope would look like even when the stored row is incomplete.
-    """
+    """Build a dashboard-only event-persist scenario from recent raw readings."""
     prepared = _prepare_recent_history_frame(history_frame)
     if prepared.empty:
         return None
@@ -999,6 +1344,21 @@ def _event_persist_from_history_frame(
     )
 
 
+# Recent raw-history loader
+# - Purpose: reads the short recent telemetry slice used by the display-only
+#   event-persist reconstruction path.
+# Function purpose: Load a short recent raw history slice for display-side event
+#   reconstruction.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, pod_id, end_utc, minutes,
+#   interpreted according to the implementation below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _load_recent_raw_history(
     *,
     data_root: Path,
@@ -1029,6 +1389,23 @@ def _load_recent_raw_history(
         & frame["rh_pct"].notna()
     ].copy()
 
+
+# Display-side minute-grid preparation
+# - Purpose: collapses recent raw readings onto the minute grid expected by the
+#   display-only event-persist reconstruction.
+# - Important decision: interpolation is limited to this presentation path and
+#   is used only to keep the explanatory chart continuous.
+# Function purpose: Collapse raw readings onto a recent minute grid for display
+#   reconstruction.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as history_frame, interpreted according to the
+#   implementation below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _prepare_recent_history_frame(history_frame: pd.DataFrame) -> pd.DataFrame:
     """Collapse raw readings onto a recent minute grid for display reconstruction."""
@@ -1063,10 +1440,34 @@ def _prepare_recent_history_frame(history_frame: pd.DataFrame) -> pd.DataFrame:
     return combined.reindex(full_index).reset_index().rename(columns={"index": "ts_pc_utc"})
 
 
+# Function purpose: Small local clamp helper used by the display-side reconstruction
+#   path.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, lower, upper, interpreted according to the
+#   implementation below.
+# - Outputs: Returns float when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _clamp(value: float, lower: float, upper: float) -> float:
     """Small local clamp helper used by the display-side reconstruction path."""
     return max(lower, min(upper, value))
 
+
+# Function purpose: Return the peak value and its horizon minute for a forecast
+#   metric.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as values, interpreted according to the implementation
+#   below.
+# - Outputs: Returns tuple[float, int] when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _peak_point(values: list[float]) -> tuple[float, int]:
     """Return the peak value and its horizon minute for a forecast metric."""
@@ -1075,6 +1476,22 @@ def _peak_point(values: list[float]) -> tuple[float, int]:
     peak_index, peak_value = max(enumerate(values, start=1), key=lambda item: item[1])
     return float(peak_value), int(peak_index)
 
+
+# Function purpose: Build the longer explanatory summary text shown with each
+#   scenario.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as scenario, event_type, source, neighbor_count,
+#   case_count, temp_start_c, temp_end_c, rh_start_pct, rh_end_pct, dew_start_c,
+#   dew_end_c, temp_peak_c, temp_peak_minute, rh_peak_pct, rh_peak_minute,
+#   dew_peak_c, dew_peak_minute, predicted_status, interpreted according to the
+#   implementation below.
+# - Outputs: Returns tuple[str, tuple[str, ...]] when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _scenario_summary_copy(
     *,
@@ -1132,6 +1549,18 @@ def _scenario_summary_copy(
     return headline, lines
 
 
+# Function purpose: Translate the storage classification result into readable
+#   dashboard copy.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as predicted_status, interpreted according to the
+#   implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _risk_summary_line(predicted_status: TrajectoryClassificationResult | None) -> str:
     """Translate the storage classification result into readable dashboard copy."""
     if predicted_status is None:
@@ -1143,6 +1572,18 @@ def _risk_summary_line(predicted_status: TrajectoryClassificationResult | None) 
     )
 
 
+# Function purpose: Explain, in one sentence, where the displayed scenario came
+#   from.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as source, neighbor_count, case_count, interpreted
+#   according to the implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _model_summary_line(*, source: str, neighbor_count: int, case_count: int) -> str:
     """Explain, in one sentence, where the displayed scenario came from."""
     source_label = str(source or "unknown").replace("_", " ")
@@ -1153,6 +1594,17 @@ def _model_summary_line(*, source: str, neighbor_count: int, case_count: int) ->
     return f"Forecast source: {source_label}, without analogue neighbours for this horizon."
 
 
+# Function purpose: Turn an internal event label into a phrase suitable for UI text.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the implementation
+#   below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _humanize_event(value: str) -> str:
     """Turn an internal event label into a phrase suitable for UI text."""
     text = str(value or "").strip().replace("_", " ")
@@ -1160,6 +1612,18 @@ def _humanize_event(value: str) -> str:
         return "live conditions"
     return text
 
+
+# Function purpose: Recover the dew-point anchor from stored features, or recompute
+#   it if missing.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as features, temp_start_c, rh_start_pct, interpreted
+#   according to the implementation below.
+# - Outputs: Returns float when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _dew_point_anchor(*, features: dict[str, float], temp_start_c: float, rh_start_pct: float) -> float:
     """Recover the dew-point anchor from stored features, or recompute it if missing."""
@@ -1169,6 +1633,18 @@ def _dew_point_anchor(*, features: dict[str, float], temp_start_c: float, rh_sta
     return _dew_point_c(temp_start_c, rh_start_pct)
 
 
+# Function purpose: Local dew-point helper kept in sync with the forecasting package
+#   for UI fallback paths.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as temp_c, rh_pct, interpreted according to the
+#   implementation below.
+# - Outputs: Returns float when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _dew_point_c(temp_c: float, rh_pct: float) -> float:
     """Local dew-point helper kept in sync with the forecasting package for UI fallback paths."""
     rh = max(1e-6, min(float(rh_pct), 100.0)) / 100.0
@@ -1176,6 +1652,17 @@ def _dew_point_c(temp_c: float, rh_pct: float) -> float:
     gamma = (a * float(temp_c) / (b + float(temp_c))) + math.log(rh)
     return (b * gamma) / (a - gamma)
 
+
+# Function purpose: Return shared Plotly interaction settings used by forecast
+#   charts.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _plotly_chart_config() -> dict[str, object]:
     """Return shared Plotly interaction settings used by forecast charts."""

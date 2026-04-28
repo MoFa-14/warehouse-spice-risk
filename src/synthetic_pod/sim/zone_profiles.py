@@ -1,9 +1,28 @@
+# File overview:
+# - Responsibility: Built-in synthetic warehouse microclimate zone profiles.
+# - Project role: Generates simulated pod behavior, schedules, faults, and
+#   environmental patterns.
+# - Main data or concerns: Synthetic sensor values, schedules, weather trends, and
+#   simulated disturbances.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
+# - Why this matters: Simulation modules matter because they extend the single
+#   physical pod into a multi-zone experimental system.
+
 """Built-in synthetic warehouse microclimate zone profiles."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-
+# Class purpose: Default parameters for one synthetic warehouse micro-zone.
+# - Project role: Belongs to the synthetic pod simulation layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 @dataclass(frozen=True)
 class ZoneProfile:
@@ -112,12 +131,29 @@ ZONE_PROFILES: dict[str, ZoneProfile] = {
         diurnal_rh_weight=0.14,
     ),
 }
-
+# Function purpose: Return the stable CLI names for all built-in profiles.
+# - Project role: Belongs to the synthetic pod simulation layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns tuple[str, ...] when the function completes successfully.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 def zone_profile_names() -> tuple[str, ...]:
     """Return the stable CLI names for all built-in profiles."""
     return tuple(ZONE_PROFILES.keys())
-
+# Function purpose: Resolve one built-in zone profile by its CLI name.
+# - Project role: Belongs to the synthetic pod simulation layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as name, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns ZoneProfile when the function completes successfully.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 def get_zone_profile(name: str) -> ZoneProfile:
     """Resolve one built-in zone profile by its CLI name."""

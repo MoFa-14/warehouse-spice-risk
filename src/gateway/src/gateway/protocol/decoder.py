@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Decode pod telemetry and status payloads into typed Python
+#   records.
+# - Project role: Decodes transport payloads and enforces schema-level telemetry
+#   rules.
+# - Main data or concerns: JSON fragments, NDJSON lines, decoded telemetry fields,
+#   and validation results.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
+# - Why this matters: Protocol rules are foundational because storage and
+#   forecasting assume the payload contract is already normalized.
+
 """Decode pod telemetry and status payloads into typed Python records.
 
 This module defines the narrow contract between on-wire pod messages and the
@@ -10,7 +22,15 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from typing import Any, Mapping
-
+# Class purpose: Raised when a pod payload cannot be interpreted safely.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   groups related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Protocol rules are foundational because storage and
+#   forecasting assume the payload contract is already normalized.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 class DecodeError(ValueError):
     """Raised when a pod payload cannot be interpreted safely.
@@ -19,7 +39,15 @@ class DecodeError(ValueError):
     process-fatal exceptions. Higher layers catch this error and record the fact
     that a corrupt or incomplete message was observed.
     """
-
+# Class purpose: Parsed Status characteristic payload.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   groups related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Protocol rules are foundational because storage and
+#   forecasting assume the payload contract is already normalized.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 @dataclass(frozen=True)
 class StatusRecord:
@@ -28,7 +56,15 @@ class StatusRecord:
     firmware_version: str
     last_error: int
     sample_interval_s: int
-
+# Class purpose: Parsed Telemetry notification payload.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   groups related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Protocol rules are foundational because storage and
+#   forecasting assume the payload contract is already normalized.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 @dataclass(frozen=True)
 class TelemetryRecord:
@@ -40,7 +76,16 @@ class TelemetryRecord:
     temp_c: float | None
     rh_pct: float | None
     flags: int
-
+# Function purpose: Coerces int into the type expected by downstream code.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, field_name, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Rejects malformed or incompatible input early so later code
+#   can assume typed values rather than repeating the same checks.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 def _coerce_int(value: Any, field_name: str) -> int:
     try:
@@ -49,7 +94,16 @@ def _coerce_int(value: Any, field_name: str) -> int:
         return int(value)
     except (TypeError, ValueError) as exc:
         raise DecodeError(f"{field_name} is not an integer: {value!r}") from exc
-
+# Function purpose: Coerces float into the type expected by downstream code.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, field_name, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns float when the function completes successfully.
+# - Important decisions: Rejects malformed or incompatible input early so later code
+#   can assume typed values rather than repeating the same checks.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 def _coerce_float(value: Any, field_name: str) -> float:
     try:
@@ -58,13 +112,32 @@ def _coerce_float(value: Any, field_name: str) -> float:
         return float(value)
     except (TypeError, ValueError) as exc:
         raise DecodeError(f"{field_name} is not a number: {value!r}") from exc
-
+# Function purpose: Coerces optional float into the type expected by downstream
+#   code.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, field_name, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Rejects malformed or incompatible input early so later code
+#   can assume typed values rather than repeating the same checks.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 def _coerce_optional_float(value: Any, field_name: str) -> float | None:
     if value is None:
         return None
     return _coerce_float(value, field_name)
-
+# Function purpose: Decode the compact status characteristic payload.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as payload, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns StatusRecord when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 def decode_status_payload(payload: bytes | bytearray | str) -> StatusRecord:
     """Decode the compact status characteristic payload.
@@ -83,7 +156,17 @@ def decode_status_payload(payload: bytes | bytearray | str) -> StatusRecord:
         last_error=_coerce_int(parts[1], "last_error"),
         sample_interval_s=_coerce_int(parts[2], "sample_interval_s"),
     )
-
+# Function purpose: Decode one telemetry message into the gateway's typed record
+#   form.
+# - Project role: Belongs to the gateway protocol parsing and validation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as payload, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns TelemetryRecord when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives raw text or bytes and passes validated structured
+#   payloads to ingestion.
 
 def decode_telemetry_payload(payload: bytes | bytearray | str | Mapping[str, Any]) -> TelemetryRecord:
     """Decode one telemetry message into the gateway's typed record form.

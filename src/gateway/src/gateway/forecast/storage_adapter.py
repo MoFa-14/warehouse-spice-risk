@@ -1,11 +1,27 @@
-"""Read live telemetry windows from SQLite or canonical raw CSV storage.
+# File overview:
+# - Responsibility: Telemetry window loading for the live forecasting pipeline.
+# - Project role: Connects stored telemetry to forecasting, persistence, evaluation,
+#   and calibration behavior.
+# - Main data or concerns: History windows, forecast bundles, evaluation rows, and
+#   calibration metadata.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
-This file is the bridge from stored telemetry to forecast-ready minute-level
-windows. It is where the project moves from raw sample storage to the cleaned,
-resampled, physically consistent sequences that the forecasting model expects.
+"""Telemetry window loading for the live forecasting pipeline.
 
-In viva terms, this is the "data preparation" layer of the live forecasting
-pipeline.
+Responsibilities:
+- Reads raw telemetry from SQLite or canonical per-pod CSV storage.
+- Applies configured calibration and optional forecast-only smoothing.
+- Rebuilds the fixed 1-minute windows used by forecasting, evaluation, and
+  historical case learning.
+
+Project flow:
+- raw stored samples -> calibration -> minute-grid resampling -> forecasting
+  history window / realised future window
+
+Why this matters:
+- Every forecast, evaluation, and learned case depends on all windows sharing
+  the same temporal structure and variable definitions.
 """
 
 from __future__ import annotations
@@ -39,6 +55,17 @@ from forecasting.utils import floor_to_minute, minute_points, parse_utc
 LOGGER = logging.getLogger(__name__)
 
 
+# Class purpose: Resampled telemetry window and basic data-quality statistics.
+# - Project role: Belongs to the gateway forecast orchestration layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
+
 @dataclass(frozen=True)
 class WindowResult:
     """Resampled telemetry window and basic data-quality statistics.
@@ -51,13 +78,38 @@ class WindowResult:
     missing_rate: float
 
 
-class ForecastStorageAdapter:
-    """Read per-pod telemetry from the preferred live storage backend.
+# Forecast telemetry adapter
+# - Purpose: loads forecast-ready telemetry windows without exposing backend-
+#   specific storage details to the runner.
+# - Project role: data-access and preprocessing boundary between raw storage and
+#   the forecasting package.
+# - Inputs: preferred backend, storage paths, and optional calibration file.
+# - Outputs: minute-grid history and future windows plus missing-rate metadata.
+# Class purpose: Read per-pod telemetry from the preferred live storage backend.
+# - Project role: Belongs to the gateway forecast orchestration layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
-    The adapter hides the storage details from the forecasting logic. That keeps
-    the runner focused on forecasting decisions instead of on whether the source
-    happens to be SQLite or CSV.
-    """
+class ForecastStorageAdapter:
+    """Read per-pod telemetry from the preferred live storage backend."""
+
+    # Method purpose: Handles init for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as storage_backend, db_path, data_root,
+    #   adjustments_path, interpreted according to the implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def __init__(
         self,
@@ -77,6 +129,18 @@ class ForecastStorageAdapter:
         )
         self.storage_backend = self._resolve_backend()
 
+    # Method purpose: Return all pod IDs currently visible in the chosen storage
+    #   backend.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns list[str] when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def list_pod_ids(self) -> list[str]:
         """Return all pod IDs currently visible in the chosen storage backend."""
         if self.storage_backend == "sqlite":
@@ -84,11 +148,37 @@ class ForecastStorageAdapter:
         pod_ids = [path.name for path in self.storage_paths.raw_pods_root.iterdir() if path.is_dir()]
         return sorted(pod_ids)
 
+    # Method purpose: Return the most recent timestamp for one pod.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns datetime | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def latest_timestamp(self, pod_id: str) -> datetime | None:
         """Return the most recent timestamp for one pod."""
         if self.storage_backend == "sqlite":
             return self._latest_timestamp_sqlite(pod_id)
         return self._latest_timestamp_csv(pod_id)
+
+    # Method purpose: Return the earliest timestamp for one pod.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns datetime | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def earliest_timestamp(self, pod_id: str) -> datetime | None:
         """Return the earliest timestamp for one pod."""
@@ -96,12 +186,27 @@ class ForecastStorageAdapter:
             return self._earliest_timestamp_sqlite(pod_id)
         return self._earliest_timestamp_csv(pod_id)
 
-    def effective_forecast_time(self, *, pod_id: str, requested_time_utc: datetime | None = None) -> datetime | None:
-        """Choose the actual timestamp at which forecasting should occur.
+    # Forecast timestamp resolution
+    # - Purpose: determines the actual timestamp at which the next forecast is
+    #   allowed to run.
+    # - Important decision: requested times are floored to the minute grid and
+    #   clamped so no forecast is issued beyond the newest available sample.
+    # Method purpose: Choose the actual timestamp at which forecasting should
+    #   occur.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, requested_time_utc, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns datetime | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
-        The forecast cannot be requested later than the newest available sample,
-        so this method clamps user/requested time to the latest real telemetry.
-        """
+    def effective_forecast_time(self, *, pod_id: str, requested_time_utc: datetime | None = None) -> datetime | None:
+        """Choose the actual timestamp at which forecasting should occur."""
         latest = self.latest_timestamp(pod_id)
         if latest is None:
             return None
@@ -109,6 +214,24 @@ class ForecastStorageAdapter:
         if requested_time_utc is None:
             return latest_minute
         return min(floor_to_minute(requested_time_utc), latest_minute)
+
+    # History-window load path
+    # - Purpose: reconstructs the fixed-length history window used as forecast
+    #   input.
+    # - Project role: preprocessing stage ahead of event detection and feature
+    #   extraction.
+    # Method purpose: Load the 3-hour history window that becomes forecast
+    #   input.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, as_of_utc, minutes, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns WindowResult when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def load_history_window(self, *, pod_id: str, as_of_utc: datetime, minutes: int) -> WindowResult:
         """Load the 3-hour history window that becomes forecast input."""
@@ -122,6 +245,22 @@ class ForecastStorageAdapter:
         )
         return self._smooth_window(_resample_rows(rows=rows, timestamps=timestamps))
 
+    # Realised-future load path
+    # - Purpose: reconstructs the realised 30-minute future used for later
+    #   forecast evaluation and case learning.
+    # Method purpose: Load the 30-minute future window used later for
+    #   evaluation.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, ts_forecast_utc, minutes, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns WindowResult when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def load_actual_horizon(self, *, pod_id: str, ts_forecast_utc: datetime, minutes: int) -> WindowResult:
         """Load the 30-minute future window used later for evaluation."""
         start = floor_to_minute(ts_forecast_utc) + timedelta(minutes=1)
@@ -132,6 +271,21 @@ class ForecastStorageAdapter:
             ts_to_utc=timestamps[-1] + timedelta(minutes=1),
         )
         return self._smooth_window(_resample_rows(rows=rows, timestamps=timestamps))
+
+    # Backend resolution
+    # - Purpose: decides whether the live forecasting path should read from
+    #   SQLite or fall back to canonical CSV files.
+    # Method purpose: Pick the live source of truth available in the current
+    #   environment.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns str when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def _resolve_backend(self) -> str:
         """Pick the live source of truth available in the current environment."""
@@ -151,6 +305,17 @@ class ForecastStorageAdapter:
             return "csv"
         return "sqlite"
 
+    # Method purpose: Lists pods SQLite for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns list[str] when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _list_pods_sqlite(self) -> list[str]:
         if not self.db_path.exists():
             return []
@@ -160,6 +325,20 @@ class ForecastStorageAdapter:
         finally:
             connection.close()
         return [str(row["pod_id"]) for row in rows]
+
+    # Method purpose: Retrieves the latest timestamp SQLite for the calling
+    #   code.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns datetime | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def _latest_timestamp_sqlite(self, pod_id: str) -> datetime | None:
         connection = connect_sqlite(self.db_path, readonly=True)
@@ -174,6 +353,19 @@ class ForecastStorageAdapter:
             return None
         return parse_utc(row["ts_pc_utc"])
 
+    # Method purpose: Handles timestamp SQLite for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns datetime | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _earliest_timestamp_sqlite(self, pod_id: str) -> datetime | None:
         connection = connect_sqlite(self.db_path, readonly=True)
         try:
@@ -186,6 +378,19 @@ class ForecastStorageAdapter:
         if row is None:
             return None
         return parse_utc(row["ts_pc_utc"])
+
+    # Method purpose: Retrieves the latest timestamp CSV for the calling code.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns datetime | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def _latest_timestamp_csv(self, pod_id: str) -> datetime | None:
         pod_dir = self.storage_paths.raw_pods_root / str(pod_id)
@@ -201,6 +406,19 @@ class ForecastStorageAdapter:
                     latest = parse_utc(row["ts_pc_utc"])
         return latest
 
+    # Method purpose: Handles timestamp CSV for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns datetime | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _earliest_timestamp_csv(self, pod_id: str) -> datetime | None:
         pod_dir = self.storage_paths.raw_pods_root / str(pod_id)
         if not pod_dir.exists():
@@ -212,12 +430,27 @@ class ForecastStorageAdapter:
                     return parse_utc(row["ts_pc_utc"])
         return None
 
-    def _raw_rows(self, *, pod_id: str, ts_from_utc: datetime, ts_to_utc: datetime) -> list[dict[str, Any]]:
-        """Read raw rows for one pod and time range, then apply calibration.
+    # Raw-row load and calibration
+    # - Purpose: reads one pod's raw rows for a time range and applies the
+    #   configured calibration adjustments.
+    # - Important decision: dew point is recomputed when needed so all later
+    #   stages receive a complete temperature/RH/dew triplet.
+    # Method purpose: Read raw rows for one pod and time range, then apply
+    #   calibration.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as pod_id, ts_from_utc, ts_to_utc, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns list[dict[str, Any]] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
-        Dew point is recomputed here when needed so downstream logic always sees
-        a complete temperature/RH/dew triplet.
-        """
+    def _raw_rows(self, *, pod_id: str, ts_from_utc: datetime, ts_to_utc: datetime) -> list[dict[str, Any]]:
+        """Read raw rows for one pod and time range, then apply calibration."""
         if self.storage_backend == "sqlite":
             rows = samples_in_range(
                 db_path=self.db_path,
@@ -249,6 +482,22 @@ class ForecastStorageAdapter:
             adjustments=self.adjustments,
         )
 
+    # Forecast-only smoothing
+    # - Purpose: applies optional smoothing after resampling while keeping the
+    #   stored raw telemetry unchanged.
+    # Method purpose: Apply any configured forecast-only smoothing to the
+    #   resampled window.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastStorageAdapter.
+    # - Inputs: Arguments such as result, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns WindowResult when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _smooth_window(self, result: WindowResult) -> WindowResult:
         """Apply any configured forecast-only smoothing to the resampled window."""
         return WindowResult(
@@ -256,6 +505,21 @@ class ForecastStorageAdapter:
             missing_rate=result.missing_rate,
         )
 
+
+# CSV raw-row loader
+# - Purpose: loads raw telemetry rows from canonical per-pod CSV files for the
+#   requested time range.
+# Function purpose: Read raw CSV telemetry rows for one pod and time range.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as storage_paths, pod_id, ts_from_utc, ts_to_utc,
+#   interpreted according to the implementation below.
+# - Outputs: Returns list[dict[str, Any]] when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
 def _read_csv_rows(
     *,
@@ -297,19 +561,34 @@ def _read_csv_rows(
     return rows
 
 
+# Minute-grid reconstruction
+# - Purpose: converts irregular raw rows into the fixed 1-minute structure used
+#   by forecasting.
+# - Project role: common preprocessing stage for live forecasting, realised
+#   future evaluation, and historical case learning.
+# - Inputs: calibrated raw rows and the exact timestamps expected by the target
+#   window.
+# - Outputs: ``WindowResult`` with minute-aligned points and missing-rate
+#   metadata.
+# - Important decisions:
+#   - average multiple samples within the same minute
+#   - interpolate only across surrounding known values
+#   - preserve an observed/reconstructed flag so completeness remains measurable
+# Function purpose: Resample irregular/raw rows onto the fixed 1-minute forecasting
+#   grid.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as rows, timestamps, interpreted according to the
+#   implementation below.
+# - Outputs: Returns WindowResult when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
+
 def _resample_rows(*, rows: list[dict[str, Any]], timestamps: list[datetime]) -> WindowResult:
-    """Resample irregular/raw rows onto the fixed 1-minute forecasting grid.
-
-    This is one of the most important preparation steps in the whole project:
-    the analogue forecaster assumes every case and every live query share the
-    same minute-level structure.
-
-    The function:
-    - groups raw readings into minute buckets
-    - averages multiple readings within a minute
-    - interpolates missing minutes when surrounding information exists
-    - marks whether each minute was genuinely observed or reconstructed
-    """
+    """Resample irregular/raw rows onto the fixed 1-minute forecasting grid."""
     buckets: dict[datetime, dict[str, list[float]]] = defaultdict(lambda: {"temp": [], "rh": [], "dew": []})
     for row in rows:
         temp_c = row.get("temp_c")
@@ -323,7 +602,8 @@ def _resample_rows(*, rows: list[dict[str, Any]], timestamps: list[datetime]) ->
         bucket["rh"].append(float(rh_pct))
         bucket["dew"].append(float(dew_point) if dew_point is not None else calculate_dew_point_c(float(temp_c), float(rh_pct)))
 
-    # These aligned series are later turned into ``TimeSeriesPoint`` objects.
+    # These aligned arrays become the canonical minute-by-minute forecasting
+    # series after interpolation and observed-flag assignment.
     known_values: dict[int, tuple[float, float, float]] = {}
     observed_flags: list[bool] = []
     temp_series: list[float | None] = []
@@ -356,9 +636,9 @@ def _resample_rows(*, rows: list[dict[str, Any]], timestamps: list[datetime]) ->
         next_index = min((candidate for candidate in known_values if candidate > index), default=None)
         if previous_index is None and next_index is None:
             continue
-        # Missing minutes are filled by carrying/interpolating neighbouring
-        # values. This keeps the forecasting grid continuous while still
-        # tracking the missing-rate separately for quality control.
+        # Missing minutes are reconstructed from neighbouring evidence so the
+        # forecasting grid stays contiguous while the missing-rate still records
+        # how much of the window was originally observed.
         if previous_index is None:
             temp_value, rh_value, dew_value = known_values[next_index]
         elif next_index is None:
@@ -389,6 +669,22 @@ def _resample_rows(*, rows: list[dict[str, Any]], timestamps: list[datetime]) ->
     return WindowResult(points=points, missing_rate=missing_rate)
 
 
+# Optional float coercion
+# - Purpose: converts raw storage text fields into floats while accepting common
+#   missing-value markers.
+# Function purpose: Convert storage text fields into floats while tolerating empty
+#   markers.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the implementation
+#   below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
+
 def _optional_float(value: object) -> float | None:
     """Convert storage text fields into floats while tolerating empty markers."""
     text = str(value).strip()
@@ -396,6 +692,21 @@ def _optional_float(value: object) -> float | None:
         return None
     return float(text)
 
+
+# UTC serialisation helper
+# - Purpose: keeps forecast storage queries aligned with the repository's stable
+#   UTC timestamp format.
+# Function purpose: Serialise a UTC datetime in the repository's stable format.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the implementation
+#   below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
 def _iso(value: datetime) -> str:
     """Serialise a UTC datetime in the repository's stable format."""

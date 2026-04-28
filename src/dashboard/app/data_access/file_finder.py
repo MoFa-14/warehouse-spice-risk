@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: File-discovery helpers for dashboard CSV fallback access.
+# - Project role: Loads persisted telemetry, forecast, or evaluation data into
+#   stable dashboard-facing tables.
+# - Main data or concerns: Telemetry rows, forecast rows, evaluation rows, and date
+#   or pod filters.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
+# - Why this matters: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+
 """File-discovery helpers for dashboard CSV fallback access.
 
 The dashboard prefers SQLite when it is available, but the project still keeps
@@ -12,7 +23,17 @@ from datetime import date
 from pathlib import Path
 
 from app.data_access.sqlite_reader import discover_pod_ids_from_sqlite, sqlite_db_exists
-
+# Function purpose: Discover pod identifiers from every storage surface the
+#   dashboard knows.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns list[str] when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def discover_pod_ids(data_root: Path, *, db_path: Path | None = None) -> list[str]:
     """Discover pod identifiers from every storage surface the dashboard knows.
@@ -31,7 +52,16 @@ def discover_pod_ids(data_root: Path, *, db_path: Path | None = None) -> list[st
             continue
         pod_ids.update(path.name for path in root.iterdir() if path.is_dir())
     return sorted(pod_ids, key=_pod_id_sort_key)
-
+# Function purpose: Return raw per-day CSV files for a pod inside a date range.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, date_from, date_to, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def find_raw_pod_files(
     data_root: Path,
@@ -43,7 +73,17 @@ def find_raw_pod_files(
     """Return raw per-day CSV files for a pod inside a date range."""
     pod_root = Path(data_root) / "raw" / "pods" / pod_id
     return _find_dated_files(pod_root, date_from=date_from, date_to=date_to)
-
+# Function purpose: Return processed per-day CSV files for a pod inside a date
+#   range.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, date_from, date_to, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def find_processed_pod_files(
     data_root: Path,
@@ -61,7 +101,16 @@ def find_processed_pod_files(
         date_to=date_to,
         stem_parser=_parse_processed_stem,
     )
-
+# Function purpose: Return link-quality daily CSV files inside a date range.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as data_root, date_from, date_to, interpreted according
+#   to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def find_link_quality_files(
     data_root: Path,
@@ -72,14 +121,32 @@ def find_link_quality_files(
     """Return link-quality daily CSV files inside a date range."""
     link_root = Path(data_root) / "raw" / "link_quality"
     return _find_dated_files(link_root, date_from=date_from, date_to=date_to)
-
+# Function purpose: Return the most recent dated CSV path from a sorted list.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as paths, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns Path | None when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def latest_file(paths: list[Path]) -> Path | None:
     """Return the most recent dated CSV path from a sorted list."""
     if not paths:
         return None
     return paths[-1]
-
+# Function purpose: Collect daily CSV files whose stems encode a usable date.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as root, pattern, date_from, date_to, stem_parser,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _find_dated_files(
     root: Path,
@@ -115,15 +182,43 @@ def _find_dated_files(
         files.append((file_date, path))
     files.sort(key=lambda item: (item[0], item[1].name))
     return [path for _, path in files]
-
+# Function purpose: Parses date stem into structured values.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as stem, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns date when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _parse_date_stem(stem: str) -> date:
     return date.fromisoformat(stem)
-
+# Function purpose: Parses processed stem into structured values.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as stem, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns date when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _parse_processed_stem(stem: str) -> date:
     return date.fromisoformat(stem.removesuffix("_processed"))
-
+# Function purpose: Implements the pod identifier sort key step used by this
+#   subsystem.
+# - Project role: Belongs to the dashboard data-loading layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns tuple[int, int | str] when the function completes successfully.
+# - Important decisions: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
 
 def _pod_id_sort_key(value: str) -> tuple[int, int | str]:
     text = str(value).strip()

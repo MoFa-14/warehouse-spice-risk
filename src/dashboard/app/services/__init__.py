@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Service exports for the dashboard.
+# - Project role: Builds route-ready view models, chart inputs, and interpretive
+#   summaries from loaded data.
+# - Main data or concerns: View models, chart series, classifications, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
+# - Why this matters: Keeping presentation logic here prevents routes and templates
+#   from reimplementing analysis rules.
+
 """Service exports for the dashboard."""
 
 from app.services.alerts_service import acknowledge_alert, build_alert_snapshot

@@ -1,17 +1,28 @@
-"""Forecasting pipeline runner that connects gateway storage to the ML package.
+# File overview:
+# - Responsibility: Operational forecast runner for the integrated gateway pipeline.
+# - Project role: Connects stored telemetry to forecasting, persistence, evaluation,
+#   and calibration behavior.
+# - Main data or concerns: History windows, forecast bundles, evaluation rows, and
+#   calibration metadata.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
-This file is the operational heart of the forecasting subsystem. If the ML
-package explains *how* a forecast is generated, this runner explains *when* it
-is generated, *what data* it uses, and *where the result goes next*.
+"""Operational forecast runner for the integrated gateway pipeline.
 
-In end-to-end project terms, the runner:
-- reads the latest telemetry for each pod
-- prepares a 3-hour history window on a 1-minute grid
-- asks the ML package for baseline and event-aware scenarios
-- stores those forecasts for the dashboard
-- later evaluates them once the real 30-minute future becomes available
-- learns new analogue cases from completed windows
-- applies light auto-calibration from recent trustworthy evaluations
+Responsibilities:
+- Orchestrates the full forecast lifecycle for each pod.
+- Connects live telemetry storage, preprocessing, model execution, persistence,
+  evaluation, case learning, and light calibration.
+
+Project flow:
+- telemetry storage -> 3-hour history window -> event detection -> baseline
+  features -> baseline forecast (+ optional event-persist) -> stored bundle ->
+  later evaluation -> case learning -> recent-bias calibration
+
+Why this matters:
+- The modelling package explains how one forecast is produced.
+- This file explains when forecasts are issued, how due evaluations are handled,
+  and how completed windows feed back into future forecasting.
 """
 
 from __future__ import annotations
@@ -51,13 +62,50 @@ CALIBRATION_TEMP_CAP_C = 1.5
 CALIBRATION_RH_CAP_PCT = 8.0
 
 
-class ForecastRunner:
-    """Run one-shot or continuous per-pod forecasting cycles.
+# Forecast lifecycle orchestrator
+# - Purpose: coordinates forecasting work for one or more pods across repeated
+#   cycles.
+# - Project role: top-level service called by CLI entry points and automation
+#   scripts.
+# - Inputs: storage configuration, optional timing overrides, and requested pod
+#   lists.
+# - Outputs: stored forecast bundles, stored evaluations, learned cases, and
+#   lightweight calibration effects on new trajectories.
+# - Related flow:
+#   - reads telemetry through ``ForecastStorageAdapter``
+#   - builds outputs through the forecasting package
+#   - persists bundles and evaluations through ``ForecastOutputs``
+# Class purpose: Run one-shot or continuous per-pod forecasting cycles.
+# - Project role: Belongs to the gateway forecast orchestration layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
-    This class is what the CLI and helper scripts call. It is therefore the
-    cleanest place to show a supervisor how the forecasting subsystem behaves as
-    a complete service rather than as isolated ML functions.
-    """
+class ForecastRunner:
+    """Run one-shot or continuous per-pod forecasting cycles."""
+
+    # Runner initialisation
+    # - Purpose: wires together configuration, telemetry access, output
+    #   persistence, case storage, and the analogue forecaster.
+    # - Project role: bootstrap stage for the forecasting service.
+    # Method purpose: Initialise the runner and connect all forecasting
+    #   subsystems.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as storage_backend, db_path, data_root,
+    #   adjustments_path, k, history_minutes, horizon_minutes, missing_rate_max,
+    #   interpreted according to the implementation below.
+    # - Outputs: Returns None when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def __init__(
         self,
@@ -71,13 +119,7 @@ class ForecastRunner:
         horizon_minutes: int = 30,
         missing_rate_max: float | None = None,
     ) -> None:
-        """Initialise the runner and connect all forecasting subsystems.
-
-        The constructor wires together three layers:
-        - configuration: fixed forecasting assumptions
-        - storage access: where telemetry, forecasts, and evaluations live
-        - modelling tools: analogue forecaster and case base
-        """
+        """Initialise the runner and connect all forecasting subsystems."""
         self.config = build_config(
             k=k,
             missing_rate_max=missing_rate_max,
@@ -104,9 +146,31 @@ class ForecastRunner:
         self.outputs.ensure_storage()
         self.case_base.ensure_storage()
 
+    # Method purpose: Handles storage backend for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns str when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     @property
     def active_storage_backend(self) -> str:
         return self.adapter.storage_backend
+
+    # Method purpose: Handles target for the surrounding project flow.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns Path when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     @property
     def lock_target(self) -> Path:
@@ -114,24 +178,55 @@ class ForecastRunner:
             return self.outputs.db_path.parent / "forecast_runner.sqlite"
         return self.outputs.forecasts_jsonl.parent / "forecast_runner.sqlite"
 
+    # Pod selection
+    # - Purpose: resolves whether the current run should use the requested pod
+    #   list or discover all available pods from storage.
+    # Method purpose: Resolve the list of pods the current run should operate
+    #   on.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as requested_pods, use_all, interpreted according
+    #   to the implementation below.
+    # - Outputs: Returns list[str] when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def pod_ids(self, requested_pods: list[str] | None = None, use_all: bool = False) -> list[str]:
         """Resolve the list of pods the current run should operate on."""
         if use_all:
             return self.adapter.list_pod_ids()
         return sorted(set(requested_pods or []))
 
+    # Full maintenance cycle
+    # - Purpose: executes the ordered forecast maintenance steps for the chosen
+    #   pods.
+    # - Project role: main scheduler-facing entry point for periodic operation.
+    # - Inputs: pod list and an optional cycle time override.
+    # - Outputs: newly generated forecast bundles.
+    # - Flow:
+    #   1. evaluate completed forecasts
+    #   2. backfill persistence metrics on older rows when needed
+    #   3. learn new analogue cases from matured windows
+    #   4. generate the next live forecast bundles
+    # Method purpose: Run one full forecasting maintenance cycle for the
+    #   requested pods.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as pod_ids, requested_time_utc, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns list[ForecastBundle] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def run_cycle(self, *, pod_ids: list[str], requested_time_utc: datetime | None = None) -> list[ForecastBundle]:
-        """Run one full forecasting maintenance cycle for the requested pods.
-
-        The order is deliberate:
-        1. evaluate old forecasts that have now reached the end of their horizon
-        2. backfill persistence comparison metrics if needed
-        3. learn new historical cases from completed windows
-        4. generate the next live forecasts
-
-        This order keeps the case base and calibration data as up to date as
-        possible before the new forecasts are issued.
-        """
+        """Run one full forecasting maintenance cycle for the requested pods."""
         cycle_time = requested_time_utc or datetime.now(timezone.utc)
         self.evaluate_due(now_utc=cycle_time, pod_ids=pod_ids)
         backfilled_count = self.backfill_persistence_metrics(now_utc=cycle_time, pod_ids=pod_ids)
@@ -147,19 +242,39 @@ class ForecastRunner:
                 bundles.append(bundle)
         return bundles
 
-    def forecast_pod(self, *, pod_id: str, requested_time_utc: datetime | None = None) -> ForecastBundle | None:
-        """Generate and store the current forecast bundle for one pod.
+    # Per-pod forecast generation
+    # - Purpose: produces and stores the current forecast bundle for one pod.
+    # - Project role: end-to-end live forecast path from stored telemetry to
+    #   persisted scenarios.
+    # - Inputs: pod identifier and optional requested forecast time.
+    # - Outputs: one stored ``ForecastBundle`` or ``None`` when telemetry is not
+    #   yet sufficient.
+    # - Related flow:
+    #   telemetry -> history window -> event detection -> baseline features ->
+    #   baseline forecast -> optional event-persist -> stored bundle
+    # Method purpose: Generate and store the current forecast bundle for one
+    #   pod.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as pod_id, requested_time_utc, interpreted
+    #   according to the implementation below.
+    # - Outputs: Returns ForecastBundle | None when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
-        This is the single best function to open in a viva if someone asks,
-        "How do we get from live sensor readings to the dashboard forecast?"
-        """
+    def forecast_pod(self, *, pod_id: str, requested_time_utc: datetime | None = None) -> ForecastBundle | None:
+        """Generate and store the current forecast bundle for one pod."""
         effective_time = self.adapter.effective_forecast_time(pod_id=pod_id, requested_time_utc=requested_time_utc)
         if effective_time is None:
             LOGGER.warning("No telemetry available for pod %s; skipping forecast.", pod_id)
             return None
 
         # Stage 1: load the latest 3-hour history window on the fixed 1-minute
-        # forecasting grid.
+        # forecasting grid shared by live forecasting and historical learning.
         history = self.adapter.load_history_window(
             pod_id=pod_id,
             as_of_utc=effective_time,
@@ -179,8 +294,8 @@ class ForecastRunner:
         # Stage 3: create the baseline-safe window that will be used for
         # analogue matching.
         baseline_window = build_baseline_window(history.points, detection=event, config=self.config)
-        # Stage 4: compress the 3-hour window into an interpretable feature
-        # vector for case-based matching.
+        # Stage 4: compress the 3-hour window into the interpretable feature
+        # vector used for case-based similarity matching.
         feature_vector = extract_feature_vector(baseline_window)
         usable_cases = self.case_base.load_cases(pod_id=pod_id, include_event_cases=False)
         # Stage 5: build the normal baseline scenario from historical analogues.
@@ -196,8 +311,8 @@ class ForecastRunner:
         if event_persist is not None:
             event_persist = self._apply_recent_calibration(pod_id=pod_id, trajectory=event_persist)
 
-        # Stage 7: package the forecast with enough context for later analysis
-        # and dashboard explanation.
+        # Stage 7: package the forecast with enough context for later storage,
+        # evaluation, dashboard explanation, and historical analysis.
         bundle = ForecastBundle(
             pod_id=pod_id,
             ts_pc_utc=to_utc_iso(effective_time),
@@ -226,6 +341,22 @@ class ForecastRunner:
         )
         return bundle
 
+    # Due-case learning
+    # - Purpose: scans pods for completed windows that can now be added to the
+    #   analogue case base.
+    # Method purpose: Learn any new analogue cases that have matured since the
+    #   last run.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as now_utc, pod_ids, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns int when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def learn_due(self, *, now_utc: datetime | None = None, pod_ids: list[str] | None = None) -> int:
         """Learn any new analogue cases that have matured since the last run."""
         learn_time = now_utc or datetime.now(timezone.utc)
@@ -233,6 +364,27 @@ class ForecastRunner:
         for pod_id in pod_ids or self.adapter.list_pod_ids():
             learned += self._learn_pod_cases(pod_id=pod_id, learn_time_utc=learn_time)
         return learned
+
+    # Due-evaluation pass
+    # - Purpose: evaluates forecast rows whose realised future is now fully
+    #   available.
+    # - Project role: closes the loop between stored forecast output and
+    #   realised performance evidence.
+    # - Outputs: saved ``EvaluationMetrics`` records and, for suitable baseline
+    #   windows, new appended analogue cases.
+    # Method purpose: Evaluate stored forecasts whose full 30-minute future is
+    #   now known.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as now_utc, pod_ids, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns list[EvaluationMetrics] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     def evaluate_due(self, *, now_utc: datetime | None = None, pod_ids: list[str] | None = None) -> list[EvaluationMetrics]:
         """Evaluate stored forecasts whose full 30-minute future is now known."""
@@ -242,9 +394,9 @@ class ForecastRunner:
         evaluations: list[EvaluationMetrics] = []
         for record in pending:
             forecast_time = parse_utc(str(record["ts_pc_utc"]))
-            # The actual future window is loaded from the same 1-minute grid used
-            # for forecasting so the prediction and outcome are directly
-            # comparable minute by minute.
+            # Actual future data is reconstructed on the same 1-minute grid used
+            # for forecasting so every stored prediction step has a directly
+            # comparable realised counterpart.
             actual = self.adapter.load_actual_horizon(
                 pod_id=str(record["pod_id"]),
                 ts_forecast_utc=forecast_time,
@@ -288,9 +440,9 @@ class ForecastRunner:
                 evaluation.rmse_rh_pct,
             )
 
-            # Only baseline windows are added back into the case base. That keeps
-            # the analogue memory aligned with ordinary storage evolution rather
-            # than mixing in event-persist what-if scenarios.
+            # Only baseline windows are learned back into the case base. The
+            # analogue memory should represent realised storage evolution rather
+            # than alternate event-persist what-if trajectories.
             if trajectory.scenario != "baseline":
                 continue
             if actual.missing_rate > self.config.missing_rate_max or forecast_missing_rate > self.config.missing_rate_max:
@@ -307,18 +459,31 @@ class ForecastRunner:
             )
         return evaluations
 
+    # Persistence backfill
+    # - Purpose: fills in persistence-comparison metrics on older evaluation
+    #   rows saved before those fields existed.
+    # - Downstream dependency: the dashboard comparison chart expects these
+    #   fields for historical model-vs-persistence review.
+    # Method purpose: Backfill persistence comparison scores for older
+    #   evaluation rows.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as now_utc, pod_ids, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns int when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def backfill_persistence_metrics(
         self,
         *,
         now_utc: datetime | None = None,
         pod_ids: list[str] | None = None,
     ) -> int:
-        """Backfill persistence comparison scores for older evaluation rows.
-
-        This helps the dashboard compare model performance against a proper
-        baseline even for historical records that were saved before those
-        persistence fields existed.
-        """
+        """Backfill persistence comparison scores for older evaluation rows."""
         evaluation_time = now_utc or datetime.now(timezone.utc)
         cutoff = to_utc_iso(evaluation_time - timedelta(minutes=self.config.horizon_minutes))
         pending = self.outputs.pending_persistence_backfill(cutoff_utc=cutoff, pod_ids=pod_ids)
@@ -340,16 +505,27 @@ class ForecastRunner:
             backfilled += 1
         return backfilled
 
+    # Historical case extraction
+    # - Purpose: walks through one pod's historical timeline and appends any
+    #   missing matured analogue cases.
+    # - Project role: converts past telemetry into reusable historical memory.
+    # - Inputs: pod identifier and the current learning cutoff time.
+    # - Outputs: count of newly stored cases.
+    # Method purpose: Walk forward through history and append any missing
+    #   matured cases.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as pod_id, learn_time_utc, interpreted according
+    #   to the implementation below.
+    # - Outputs: Returns int when the function completes successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _learn_pod_cases(self, *, pod_id: str, learn_time_utc: datetime) -> int:
-        """Walk forward through history and append any missing matured cases.
-
-        Each learned case uses:
-        - a 3-hour feature window ending at a historical timestamp
-        - the actual next 30 minutes as the answer trajectory
-
-        This is what turns the warehouse's past telemetry into an analogue case
-        base for future forecasting.
-        """
+        """Walk forward through history and append any missing matured cases."""
         earliest = self.adapter.earliest_timestamp(pod_id)
         if earliest is None:
             return 0
@@ -402,14 +578,28 @@ class ForecastRunner:
             current += timedelta(minutes=self.learning_interval_minutes)
         return learned
 
-    def _apply_recent_calibration(self, *, pod_id: str, trajectory):
-        """Apply a lightweight bias correction from recent trustworthy evaluations.
+    # Lightweight recent-bias calibration
+    # - Purpose: shifts a newly generated trajectory using recent trustworthy
+    #   signed bias estimates.
+    # - Project role: post-processing stage after trajectory generation and
+    #   before the bundle is stored.
+    # - Important decisions: calibration is capped, only trusted evaluations are
+    #   used upstream, and dew point is recomputed after temperature/RH shifts.
+    # Method purpose: Apply a lightweight bias correction from recent
+    #   trustworthy evaluations.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as pod_id, trajectory, interpreted according to
+    #   the implementation below.
+    # - Outputs: Returns the value or side effect defined by the implementation.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
-        This is intentionally modest. It does not retrain the model; it simply
-        shifts the forecast if recent evaluated windows show a consistent signed
-        bias. Large-error and missing-data windows are filtered out upstream so
-        calibration is not driven by obviously bad evidence.
-        """
+    def _apply_recent_calibration(self, *, pod_id: str, trajectory):
+        """Apply a lightweight bias correction from recent trustworthy evaluations."""
         bias = self.outputs.recent_bias(
             pod_id=pod_id,
             scenario=trajectory.scenario,
@@ -453,6 +643,23 @@ class ForecastRunner:
             notes=_append_note(trajectory.notes, correction_note),
         )
 
+    # Persistence baseline scoring
+    # - Purpose: evaluates a flat anchor-hold baseline against the realised
+    #   future so model skill can be compared against a trivial forecast.
+    # Method purpose: Evaluate the flat persistence baseline for comparison
+    #   against the model.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as record, actual_points, interpreted according
+    #   to the implementation below.
+    # - Outputs: Returns dict[str, float] when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
+
     def _persistence_metrics(self, *, record: dict[str, object], actual_points: list) -> dict[str, float]:
         """Evaluate the flat persistence baseline for comparison against the model."""
         baseline = evaluate_forecast(
@@ -470,12 +677,26 @@ class ForecastRunner:
             "persistence_rmse_rh_pct": baseline.rmse_rh_pct,
         }
 
-    def _persistence_trajectory(self, record: dict[str, object]):
-        """Construct a flat persistence trajectory from the stored forecast anchor.
+    # Persistence trajectory construction
+    # - Purpose: rebuilds the simple baseline that holds the last observed state
+    #   flat across the whole horizon.
+    # - Downstream dependency: used during evaluation and dashboard model-vs-
+    #   persistence comparisons.
+    # Method purpose: Construct a flat persistence trajectory from the stored
+    #   forecast anchor.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as record, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns the value or side effect defined by the implementation.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
-        This baseline answers the simple question:
-        "What if nothing changed and the latest observed state just continued?"
-        """
+    def _persistence_trajectory(self, record: dict[str, object]):
+        """Construct a flat persistence trajectory from the stored forecast anchor."""
         features = self.outputs.feature_vector_from_record(record)
         anchor_temp_c = float(features.get("temp_last", 0.0))
         anchor_rh_pct = clamp(float(features.get("rh_last", 0.0)), 0.0, 100.0)
@@ -496,6 +717,23 @@ class ForecastRunner:
             case_count=0,
             notes="Flat persistence baseline anchored to the latest observed reading.",
         )
+
+    # Evaluation row reconstruction
+    # - Purpose: converts one stored evaluation row back into the in-memory
+    #   ``EvaluationMetrics`` structure for persistence backfill updates.
+    # Method purpose: Recreate an ``EvaluationMetrics`` object from a stored
+    #   row.
+    # - Project role: Belongs to the gateway forecast orchestration layer and
+    #   acts as a method on ForecastRunner.
+    # - Inputs: Arguments such as record, interpreted according to the
+    #   implementation below.
+    # - Outputs: Returns EvaluationMetrics when the function completes
+    #   successfully.
+    # - Design reason: Forecast-facing code needs explicit documentation because
+    #   later evaluation, storage, and dashboard layers depend on the exact
+    #   transformation path.
+    # - Related flow: Receives normalized telemetry windows and passes stored
+    #   forecasts and evaluations to later dashboard reads.
 
     @staticmethod
     def _evaluation_from_record(record: dict[str, object]) -> EvaluationMetrics:
@@ -527,6 +765,21 @@ class ForecastRunner:
             notes=str(record.get("notes") or ""),
         )
 
+
+# Forecast-note helper
+# - Purpose: appends one explanatory note to stored metadata without
+#   duplicating the same sentence.
+# Function purpose: Append a short human-readable note to stored forecast metadata.
+# - Project role: Belongs to the gateway forecast orchestration layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as existing, addition, interpreted according to the
+#   implementation below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Forecast-facing code needs explicit documentation because later
+#   evaluation, storage, and dashboard layers depend on the exact transformation
+#   path.
+# - Related flow: Receives normalized telemetry windows and passes stored forecasts
+#   and evaluations to later dashboard reads.
 
 def _append_note(existing: str, addition: str) -> str:
     """Append a short human-readable note to stored forecast metadata."""

@@ -1,6 +1,6 @@
 param(
     [int]$Port = 5000,
-    [string]$Host = "127.0.0.1",
+    [string]$HostAddress = "127.0.0.1",
     [int]$AutoRefreshSeconds = 0
 )
 
@@ -15,7 +15,7 @@ if (-not (Test-Path $venvPython)) {
 Push-Location $dashboardRoot
 try {
     $env:DASHBOARD_AUTO_REFRESH_SECONDS = "$AutoRefreshSeconds"
-    & $venvPython -m flask --app app.main run --host $Host --port $Port --debug
+    & $venvPython -m flask --app app.main run --host $HostAddress --port $Port --debug
 }
 finally {
     Pop-Location

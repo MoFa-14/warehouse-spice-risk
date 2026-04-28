@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Route normalized telemetry records to per-pod storage and resend
+#   logic.
+# - Project role: Normalizes and routes telemetry arriving from multiple pods.
+# - Main data or concerns: Pod identifiers, normalized records, and routing
+#   decisions.
+# - Related flow: Receives transport-specific records and passes per-pod outputs to
+#   storage and diagnostics.
+# - Why this matters: The integrated system depends on this layer to keep multi-pod
+#   handling explicit rather than implicit.
+
 """Route normalized telemetry records to per-pod storage and resend logic.
 
 This module is the live decision point between ingestion and persistence. It
@@ -31,7 +42,15 @@ from gateway.utils.timeutils import utc_now, utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
-
+# Class purpose: Runtime stats tracked per pod across BLE and TCP ingestion.
+# - Project role: Belongs to the multi-pod routing layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The integrated system depends on this layer to keep
+#   multi-pod handling explicit rather than implicit.
+# - Related flow: Receives transport-specific records and passes per-pod outputs to
+#   storage and diagnostics.
 
 @dataclass
 class PodStats:
@@ -60,12 +79,29 @@ class PodStats:
     last_requested_from_seq_at: datetime | None = None
     drift_anomalies: int = 0
     last_drift_s: float | None = None
+    # Method purpose: Implements the missing rate step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodStats.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     @property
     def missing_rate(self) -> float:
         denominator = self.received + self.missing
         return (self.missing / denominator) if denominator else 0.0
-
+# Class purpose: Single consumer that validates, logs, stores, and requests resends.
+# - Project role: Belongs to the multi-pod routing layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The integrated system depends on this layer to keep
+#   multi-pod handling explicit rather than implicit.
+# - Related flow: Receives transport-specific records and passes per-pod outputs to
+#   storage and diagnostics.
 
 class PodRouter:
     """Single consumer that validates, logs, stores, and requests resends.
@@ -76,6 +112,21 @@ class PodRouter:
     itself. Its role is to ensure that the stored telemetry history is as
     coherent and well-annotated as possible before later analysis begins.
     """
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as queue, firmware, validation, storage_backend,
+    #   data_root, db_path, reopen_delay_s, resend_cooldown_s,
+    #   duplicate_log_interval_s, interpreted according to the rules encoded in
+    #   the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def __init__(
         self,
@@ -104,12 +155,32 @@ class PodRouter:
         self._resend_controllers: dict[str, ResendController] = {}
         self._stats: dict[str, PodStats] = {}
         self._alignment_by_pod: dict[str, AlignmentState] = {}
+    # Method purpose: Implements the start step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def start(self) -> None:
         if self._consumer_task is not None:
             return
         self._consumer_task = asyncio.create_task(self._consume_loop(), name="multi-pod-router")
         self._consumer_task.add_done_callback(self._log_task_failure)
+    # Method purpose: Implements the stop step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def stop(self) -> None:
         await self.queue.join()
@@ -119,12 +190,46 @@ class PodRouter:
                 await self._consumer_task
             self._consumer_task = None
         self.writer.close()
+    # Method purpose: Implements the register resend controller step used by
+    #   this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, controller, interpreted according to
+    #   the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def register_resend_controller(self, pod_id: str, controller: ResendController) -> None:
         self._resend_controllers[pod_id] = controller
+    # Method purpose: Implements the note reconnect step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, source, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def note_reconnect(self, pod_id: str, source: str) -> None:
         self._stats_for(pod_id, source).reconnects += 1
+    # Method purpose: Implements the note connected step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, source, last_rssi, interpreted
+    #   according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def note_connected(self, pod_id: str, source: str, *, last_rssi: int | None = None) -> None:
         stats = self._stats_for(pod_id, source)
@@ -134,6 +239,18 @@ class PodRouter:
             stats.last_rssi = int(last_rssi)
         if not was_connected:
             LOGGER.info("[pod=%s source=%s] connected", pod_id, source)
+    # Method purpose: Implements the note disconnected step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, source, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def note_disconnected(self, pod_id: str, source: str) -> None:
         stats = self._stats_for(pod_id, source)
@@ -143,11 +260,33 @@ class PodRouter:
         stats.connected = False
         if was_connected:
             LOGGER.info("[pod=%s source=%s] disconnected", pod_id, source)
+    # Method purpose: Implements the update rssi step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, source, rssi, interpreted according to
+    #   the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def update_rssi(self, pod_id: str, source: str, rssi: int | None) -> None:
         if rssi is None:
             return
         self._stats_for(pod_id, source).last_rssi = int(rssi)
+    # Method purpose: Implements the note corrupt step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, source, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def note_corrupt(self, pod_id: str, source: str) -> None:
         stats = self._stats_for(pod_id, source)
@@ -155,9 +294,32 @@ class PodRouter:
         stats.corrupt_count += 1
         expected_seq = 1 if stats.last_seq_high_water is None else stats.last_seq_high_water + 1
         await self._request_seq(pod_id, expected_seq, stats=stats)
+    # Method purpose: Implements the stats snapshot step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns list[PodStats] when the function completes
+    #   successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def stats_snapshot(self) -> list[PodStats]:
         return [self._clone_stats(item) for item in self._stats.values()]
+    # Method purpose: Build storage-ready snapshots of current per-pod
+    #   communication state.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as ts_pc_utc, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns list[LinkSnapshot] when the function completes
+    #   successfully.
+    # - Important decisions: The transformation rules here define how later code
+    #   interprets the same data, so the shape of the output needs to stay
+    #   stable and reproducible.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def build_link_snapshots(self, *, ts_pc_utc: str) -> list[LinkSnapshot]:
         """Build storage-ready snapshots of current per-pod communication state."""
@@ -176,9 +338,31 @@ class PodRouter:
             )
             for stats in self.stats_snapshot()
         ]
+    # Method purpose: Writes link snapshot into the configured destination.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as snapshot, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Persistence-facing code centralizes storage rules
+    #   so other modules do not duplicate schema or serialization assumptions.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def write_link_snapshot(self, snapshot: LinkSnapshot) -> None:
         self.writer.write_link_snapshot(snapshot)
+    # Method purpose: Serially process incoming records while keeping queue
+    #   semantics safe.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def _consume_loop(self) -> None:
         """Serially process incoming records while keeping queue semantics safe."""
@@ -196,6 +380,17 @@ class PodRouter:
                 await self._process_record(record)
             finally:
                 self.queue.task_done()
+    # Method purpose: Validate, annotate, and store one telemetry record.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as record, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def _process_record(self, record: TelemetryRecord) -> None:
         """Validate, annotate, and store one telemetry record.
@@ -268,6 +463,16 @@ class PodRouter:
             record.rh_pct,
             record.flags,
         )
+    # Method purpose: Derive validation flags for the incoming telemetry record.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as record, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns list[str] when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _quality_flags(self, record: TelemetryRecord) -> list[str]:
         """Derive validation flags for the incoming telemetry record."""
@@ -285,6 +490,16 @@ class PodRouter:
             firmware=self.firmware,
         )
         return list(validated.quality_flags)
+    # Method purpose: Implements the stats for step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, source, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns PodStats when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _stats_for(self, pod_id: str, source: str) -> PodStats:
         stats = self._stats.get(pod_id)
@@ -294,6 +509,17 @@ class PodRouter:
         else:
             stats.source = source
         return stats
+    # Method purpose: Implements the should reset sequence step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as stats, record, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     @staticmethod
     def _should_reset_sequence(stats: PodStats, record: TelemetryRecord) -> bool:
@@ -303,6 +529,16 @@ class PodRouter:
             seq=int(record.seq),
             ts_uptime_s=float(record.ts_uptime_s),
         )
+    # Method purpose: Implements the clone stats step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as stats, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns PodStats when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     @staticmethod
     def _clone_stats(stats: PodStats) -> PodStats:
@@ -331,6 +567,18 @@ class PodRouter:
             drift_anomalies=stats.drift_anomalies,
             last_drift_s=stats.last_drift_s,
         )
+    # Method purpose: Implements the alignment state for step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns AlignmentState when the function completes
+    #   successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _alignment_state_for(self, pod_id: str) -> AlignmentState:
         state = self._alignment_by_pod.get(pod_id)
@@ -338,11 +586,34 @@ class PodRouter:
             state = AlignmentState()
             self._alignment_by_pod[pod_id] = state
         return state
+    # Method purpose: Builds writer for the next stage of the project flow.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: The transformation rules here define how later code
+    #   interprets the same data, so the shape of the output needs to stay
+    #   stable and reproducible.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _build_writer(self):
         if self.storage_backend == "sqlite":
             return SqliteStorageWriter(self.db_path)
         return PerPodCsvWriter(self.data_root)
+    # Method purpose: Implements the hydrate stats from storage step used by
+    #   this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as stats, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _hydrate_stats_from_storage(self, stats: PodStats) -> None:
         if stats.hydrated_from_storage or self.storage_backend != "sqlite":
@@ -358,6 +629,18 @@ class PodRouter:
             ts_value = row.get("ts_pc_utc")
             stats.last_seen_utc = None if ts_value is None else str(ts_value)
         stats.hydrated_from_storage = True
+    # Method purpose: Implements the remember progress step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as stats, record, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     @staticmethod
     def _remember_progress(stats: PodStats, record: TelemetryRecord) -> None:
@@ -367,6 +650,17 @@ class PodRouter:
             stats.last_seq_high_water = record.seq
         if stats.last_uptime_s is None or record.ts_uptime_s >= stats.last_uptime_s:
             stats.last_uptime_s = record.ts_uptime_s
+    # Method purpose: Implements the log duplicate step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as stats, record, reason, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _log_duplicate(self, stats: PodStats, record: TelemetryRecord, *, reason: str) -> None:
         if not LOGGER.isEnabledFor(logging.DEBUG):
@@ -399,6 +693,17 @@ class PodRouter:
             record.seq,
             reason,
         )
+    # Method purpose: Implements the request seq step used by this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, seq, stats, interpreted according to
+    #   the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def _request_seq(self, pod_id: str, seq: int, *, stats: PodStats) -> None:
         if self._should_skip_seq_request(stats, seq):
@@ -411,6 +716,18 @@ class PodRouter:
         stats.last_requested_seq_at = utc_now()
         self._log_gateway_event(level="warning", pod_id=pod_id, message=f"resend_request seq={seq}")
         await controller.request_seq(pod_id, seq)
+    # Method purpose: Implements the request from seq step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as pod_id, from_seq, stats, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     async def _request_from_seq(self, pod_id: str, from_seq: int, *, stats: PodStats) -> None:
         if self._should_skip_from_seq_request(stats, from_seq):
@@ -423,16 +740,50 @@ class PodRouter:
         stats.last_requested_from_seq_at = utc_now()
         self._log_gateway_event(level="warning", pod_id=pod_id, message=f"resend_request from_seq={from_seq}")
         await controller.request_from_seq(pod_id, from_seq)
+    # Method purpose: Implements the should skip seq request step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as stats, seq, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _should_skip_seq_request(self, stats: PodStats, seq: int) -> bool:
         if stats.last_requested_seq != int(seq) or stats.last_requested_seq_at is None:
             return False
         return utc_now() - stats.last_requested_seq_at < self.resend_cooldown
+    # Method purpose: Implements the should skip from seq request step used by
+    #   this subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as stats, from_seq, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _should_skip_from_seq_request(self, stats: PodStats, from_seq: int) -> bool:
         if stats.last_requested_from_seq != int(from_seq) or stats.last_requested_from_seq_at is None:
             return False
         return utc_now() - stats.last_requested_from_seq_at < self.resend_cooldown
+    # Method purpose: Implements the log task failure step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as task, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     @staticmethod
     def _log_task_failure(task: asyncio.Task[None]) -> None:
@@ -445,6 +796,18 @@ class PodRouter:
                 "Pod router task terminated unexpectedly.",
                 exc_info=(type(exc), exc, exc.__traceback__),
             )
+    # Method purpose: Implements the log gateway event step used by this
+    #   subsystem.
+    # - Project role: Belongs to the multi-pod routing layer and acts as a
+    #   method on PodRouter.
+    # - Inputs: Arguments such as level, pod_id, message, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: The integrated system depends on this layer to keep
+    #   multi-pod handling explicit rather than implicit.
+    # - Related flow: Receives transport-specific records and passes per-pod
+    #   outputs to storage and diagnostics.
 
     def _log_gateway_event(self, *, level: str, pod_id: str, message: str) -> None:
         log_event = getattr(self.writer, "log_event", None)

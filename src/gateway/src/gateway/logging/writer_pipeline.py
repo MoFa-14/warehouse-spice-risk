@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Queue-backed CSV writer pipeline for gateway telemetry and link
+#   snapshots.
+# - Project role: Coordinates append-only file writing, locking, and
+#   persistence-side buffering.
+# - Main data or concerns: CSV rows, write queues, locks, and storage paths.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
+# - Why this matters: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+
 """Queue-backed CSV writer pipeline for gateway telemetry and link snapshots."""
 
 from __future__ import annotations
@@ -20,6 +31,16 @@ from gateway.utils.timeutils import utc_now, utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
+# Class purpose: One parsed telemetry record waiting to be persisted.
+# - Project role: Belongs to the gateway write and logging pipeline and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
+
 @dataclass
 class SampleWriteRequest:
     """One parsed telemetry record waiting to be persisted."""
@@ -31,7 +52,15 @@ class SampleWriteRequest:
     canonical_result: RawWriteResult | None = None
     counted_write: bool = False
     legacy_written: bool = False
-
+# Class purpose: One link-quality snapshot waiting to be persisted.
+# - Project role: Belongs to the gateway write and logging pipeline and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
 
 @dataclass
 class LinkSnapshotWriteRequest:
@@ -41,7 +70,15 @@ class LinkSnapshotWriteRequest:
     canonical_written: bool = False
     counted_write: bool = False
     legacy_written: bool = False
-
+# Class purpose: Operational counters for the queue-backed writer.
+# - Project role: Belongs to the gateway write and logging pipeline and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
 
 @dataclass
 class WriterMetrics:
@@ -50,7 +87,15 @@ class WriterMetrics:
     rows_written: int = 0
     write_errors: int = 0
     last_write_time_utc: str | None = None
-
+# Class purpose: Factory bundle used by tests and the runtime to create writers.
+# - Project role: Belongs to the gateway write and logging pipeline and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
 
 @dataclass
 class WriterDependencies:
@@ -59,10 +104,33 @@ class WriterDependencies:
     raw_writer_factory: Callable[[Path], RawTelemetryWriter] = RawTelemetryWriter
     link_writer_factory: Callable[[Path], LinkQualityWriter] = LinkQualityWriter
     legacy_logger_factory: Callable[[Path], GatewayCsvLogger] = GatewayCsvLogger
-
+# Class purpose: Serialize all CSV writes through one resilient background task.
+# - Project role: Belongs to the gateway write and logging pipeline and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
 
 class GatewayWriterPipeline:
     """Serialize all CSV writes through one resilient background task."""
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: Arguments such as storage_root, log_dir, queue_maxsize,
+    #   heartbeat_interval_s, reopen_delay_s, red_flag_failures_per_minute,
+    #   dependencies, interpreted according to the rules encoded in the body
+    #   below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def __init__(
         self,
@@ -91,6 +159,16 @@ class GatewayWriterPipeline:
         self._stop_event = asyncio.Event()
         self._error_times: deque[datetime] = deque()
         self._last_red_flag_at: datetime | None = None
+    # Method purpose: Start the consumer and heartbeat tasks once.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def start(self) -> None:
         """Start the consumer and heartbeat tasks once."""
@@ -100,6 +178,17 @@ class GatewayWriterPipeline:
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop(), name="gateway-writer-heartbeat")
         self._attach_done_logger(self._consumer_task)
         self._attach_done_logger(self._heartbeat_task)
+    # Method purpose: Queue one telemetry record for resilient persistence.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: Arguments such as ts_pc_utc, record, rssi, quality_flags,
+    #   interpreted according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     async def enqueue_sample(
         self,
@@ -118,10 +207,32 @@ class GatewayWriterPipeline:
                 quality_flags=quality_flags,
             )
         )
+    # Method purpose: Queue one link-quality snapshot for resilient persistence.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: Arguments such as snapshot, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     async def enqueue_link_snapshot(self, snapshot: LinkSnapshot) -> None:
         """Queue one link-quality snapshot for resilient persistence."""
         await self.queue.put(LinkSnapshotWriteRequest(snapshot=snapshot))
+    # Method purpose: Drain queued writes, stop the worker, and close any open
+    #   file handles.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     async def stop(self) -> None:
         """Drain queued writes, stop the worker, and close any open file handles."""
@@ -141,6 +252,16 @@ class GatewayWriterPipeline:
             self._heartbeat_task = None
 
         self._close_writers()
+    # Method purpose: Implements the consumer loop step used by this subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     async def _consumer_loop(self) -> None:
         pending_item: SampleWriteRequest | LinkSnapshotWriteRequest | None = None
@@ -164,6 +285,16 @@ class GatewayWriterPipeline:
 
             self.queue.task_done()
             pending_item = None
+    # Method purpose: Implements the heartbeat loop step used by this subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     async def _heartbeat_loop(self) -> None:
         while not self._stop_event.is_set():
@@ -177,6 +308,17 @@ class GatewayWriterPipeline:
                     self.queue.qsize(),
                     self.metrics.last_write_time_utc or "never",
                 )
+    # Method purpose: Implements the process item step used by this subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: Arguments such as item, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def _process_item(self, item: SampleWriteRequest | LinkSnapshotWriteRequest) -> None:
         self._ensure_writers()
@@ -184,6 +326,17 @@ class GatewayWriterPipeline:
             self._process_sample(item)
             return
         self._process_link_snapshot(item)
+    # Method purpose: Implements the process sample step used by this subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: Arguments such as item, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def _process_sample(self, item: SampleWriteRequest) -> None:
         assert self._raw_writer is not None
@@ -210,6 +363,18 @@ class GatewayWriterPipeline:
                 quality_flags=item.quality_flags,
             )
             item.legacy_written = True
+    # Method purpose: Implements the process link snapshot step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: Arguments such as item, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def _process_link_snapshot(self, item: LinkSnapshotWriteRequest) -> None:
         if _is_stop_item(item):
@@ -227,6 +392,17 @@ class GatewayWriterPipeline:
         if not item.legacy_written and self._legacy_logger is not None:
             self._legacy_logger.log_link_snapshot(item.snapshot)
             item.legacy_written = True
+    # Method purpose: Ensures that writers exists before later logic depends on
+    #   it.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def _ensure_writers(self) -> None:
         if self._raw_writer is None:
@@ -235,6 +411,16 @@ class GatewayWriterPipeline:
             self._link_writer = self._dependencies.link_writer_factory(self.storage_root)
         if self._legacy_logger is None:
             self._legacy_logger = self._dependencies.legacy_logger_factory(self.log_dir)
+    # Method purpose: Implements the close writers step used by this subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def _close_writers(self) -> None:
         for writer in (self._legacy_logger, self._link_writer, self._raw_writer):
@@ -244,6 +430,16 @@ class GatewayWriterPipeline:
         self._legacy_logger = None
         self._link_writer = None
         self._raw_writer = None
+    # Method purpose: Implements the record error step used by this subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def _record_error(self) -> None:
         self.metrics.write_errors += 1
@@ -264,13 +460,48 @@ class GatewayWriterPipeline:
             "WRITER RED FLAG: %s write failures in the last 60s; still retrying and keeping the queue alive.",
             len(self._error_times),
         )
+    # Method purpose: Implements the record success step used by this subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     def _record_success(self) -> None:
         self.metrics.rows_written += 1
         self.metrics.last_write_time_utc = utc_now_iso()
+    # Method purpose: Implements the attach done logger step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway write and logging pipeline and acts
+    #   as a method on GatewayWriterPipeline.
+    # - Inputs: Arguments such as task, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Centralizing write behavior avoids duplicate
+    #   storage-side assumptions across the gateway.
+    # - Related flow: Receives normalized records from routing or preprocessing
+    #   and passes persisted outputs to later analysis.
 
     @staticmethod
     def _attach_done_logger(task: asyncio.Task[None]) -> None:
+        # Method purpose: Implements the log done step used by this
+        #   subsystem.
+        # - Project role: Belongs to the gateway write and logging pipeline
+        #   and acts as a method on GatewayWriterPipeline.
+        # - Inputs: Arguments such as completed, interpreted according to
+        #   the rules encoded in the body below.
+        # - Outputs: No direct return value; the function performs state
+        #   updates or side effects.
+        # - Important decisions: Centralizing write behavior avoids
+        #   duplicate storage-side assumptions across the gateway.
+        # - Related flow: Receives normalized records from routing or
+        #   preprocessing and passes persisted outputs to later analysis.
+
         def _log_done(completed: asyncio.Task[None]) -> None:
             if completed.cancelled():
                 return
@@ -284,7 +515,15 @@ class GatewayWriterPipeline:
                 )
 
         task.add_done_callback(_log_done)
-
+# Function purpose: Implements the stop snapshot step used by this subsystem.
+# - Project role: Belongs to the gateway write and logging pipeline and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns LinkSnapshot when the function completes successfully.
+# - Important decisions: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
 
 def _stop_snapshot() -> LinkSnapshot:
     return LinkSnapshot(
@@ -299,7 +538,16 @@ def _stop_snapshot() -> LinkSnapshot:
         reconnect_count=0,
         missing_rate=0.0,
     )
-
+# Function purpose: Implements the is stop item step used by this subsystem.
+# - Project role: Belongs to the gateway write and logging pipeline and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as item, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Centralizing write behavior avoids duplicate storage-side
+#   assumptions across the gateway.
+# - Related flow: Receives normalized records from routing or preprocessing and
+#   passes persisted outputs to later analysis.
 
 def _is_stop_item(item: SampleWriteRequest | LinkSnapshotWriteRequest) -> bool:
     return isinstance(item, LinkSnapshotWriteRequest) and item.snapshot.pod_id == "__STOP__"

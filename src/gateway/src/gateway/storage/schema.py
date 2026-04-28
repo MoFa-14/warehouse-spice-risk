@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Stable CSV schemas and quality-flag helpers for Layer 3 storage.
+# - Project role: Stores raw telemetry, link diagnostics, and exportable datasets in
+#   canonical formats.
+# - Main data or concerns: SQLite rows, CSV rows, schema definitions, and storage
+#   paths.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
+# - Why this matters: Persistence code matters because the rest of the project only
+#   sees what this layer records and exposes.
+
 """Stable CSV schemas and quality-flag helpers for Layer 3 storage."""
 
 from __future__ import annotations
@@ -51,7 +62,15 @@ TRAINING_DATASET_COLUMNS = [
     "dew_point_c",
     "missing",
 ]
-
+# Class purpose: Bitmask persisted in Layer 3 raw storage for audit-friendly replay.
+# - Project role: Belongs to the gateway persistence layer and groups related state
+#   or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 class QualityFlag(IntFlag):
     """Bitmask persisted in Layer 3 raw storage for audit-friendly replay."""
@@ -86,7 +105,16 @@ _QUALITY_FLAG_MAP = {
 _QUALITY_FLAG_NAMES_BY_VALUE = {
     int(member): name for name, member in _QUALITY_FLAG_MAP.items()
 }
-
+# Function purpose: Encode flag names into a stable integer bitmask.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as flags, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def quality_flags_to_mask(flags: Iterable[str]) -> int:
     """Encode flag names into a stable integer bitmask."""
@@ -96,7 +124,17 @@ def quality_flags_to_mask(flags: Iterable[str]) -> int:
         if member is not None:
             mask |= member
     return int(mask)
-
+# Function purpose: Parse either a numeric mask or a legacy pipe-delimited flag
+#   string.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def parse_quality_mask(value: int | str | None) -> int:
     """Parse either a numeric mask or a legacy pipe-delimited flag string."""
@@ -112,12 +150,30 @@ def parse_quality_mask(value: int | str | None) -> int:
         return int(text)
     except ValueError:
         return quality_flags_to_mask(part for part in text.split("|") if part)
-
+# Function purpose: Return whether a parsed bitmask contains the requested flag.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as mask, flag, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def has_quality_flag(mask: int, flag: QualityFlag) -> bool:
     """Return whether a parsed bitmask contains the requested flag."""
     return bool(QualityFlag(mask) & flag)
-
+# Function purpose: Decode a stored quality mask back into stable flag names.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as mask, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns tuple[str, ...] when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def quality_mask_to_flags(mask: int | str | None) -> tuple[str, ...]:
     """Decode a stored quality mask back into stable flag names."""

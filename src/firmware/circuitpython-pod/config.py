@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Configuration constants for the CircuitPython SHT45 pod.
+# - Project role: Implements device-side sensing, buffering, status tracking, and
+#   BLE behavior on the physical pod.
+# - Main data or concerns: Sensor samples, ring-buffer entries, BLE payloads, status
+#   fields, and timing values.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
+# - Why this matters: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+
 """Configuration constants for the CircuitPython SHT45 pod."""
 
 POD_ID = "01"
@@ -28,7 +39,16 @@ SENSOR_ERROR_READ_FAILED = 2
 
 CONTROL_CMD_REQ_FROM_SEQ = "REQ_FROM_SEQ"
 CONTROL_CMD_SET_INTERVAL = "SET_INTERVAL"
-
+# Function purpose: Return the advertised BLE device name.
+# - Project role: Belongs to the embedded firmware runtime layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Gateway decoding and storage rely on the firmware keeping
+#   telemetry semantics consistent.
+# - Related flow: Reads sensors and pod state, then exposes telemetry and control
+#   behavior to the gateway.
 
 def device_name():
     """Return the advertised BLE device name."""

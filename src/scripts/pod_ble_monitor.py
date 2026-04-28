@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Implements the pod BLE monitor logic for this project area.
+# - Project role: Provides convenience entry points for monitoring, forecasting, and
+#   evaluation workflows.
+# - Main data or concerns: Command-line options, runtime handles, and script-level
+#   control flow.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
+# - Why this matters: Scripts matter because they are the shortest operational path
+#   into the project for routine runs.
+
 import argparse
 import asyncio
 import importlib.util
@@ -10,7 +21,18 @@ SRC_ROOT = Path(__file__).resolve().parents[1]
 FIRMWARE_DIR = SRC_ROOT / "firmware" / "circuitpython-pod"
 CONFIG_PATH = FIRMWARE_DIR / "config.py"
 POD_ADDRESS = "F2:9A:41:2B:5B:55"
-
+# Function purpose: Loads firmware config into the structure expected by downstream
+#   code.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def load_firmware_config():
     spec = importlib.util.spec_from_file_location("pod_firmware_config", CONFIG_PATH)
@@ -27,14 +49,47 @@ SERVICE_UUID = FIRMWARE_CONFIG.SERVICE_UUID.lower()
 TELEMETRY_UUID = FIRMWARE_CONFIG.TELEMETRY_CHAR_UUID.lower()
 CONTROL_UUID = FIRMWARE_CONFIG.CONTROL_CHAR_UUID.lower()
 STATUS_UUID = FIRMWARE_CONFIG.STATUS_CHAR_UUID.lower()
-
+# Class purpose: Encapsulates the JsonChunkAssembler responsibilities used by this
+#   module.
+# - Project role: Belongs to the operator automation script layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 class JsonChunkAssembler:
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on JsonChunkAssembler.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
+
     def __init__(self):
         self.buffer = ""
         self.depth = 0
         self.in_string = False
         self.escape = False
+    # Method purpose: Implements the feed step used by this subsystem.
+    # - Project role: Belongs to the operator automation script layer and acts
+    #   as a method on JsonChunkAssembler.
+    # - Inputs: Arguments such as text, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: Scripts matter because they are the shortest
+    #   operational path into the project for routine runs.
+    # - Related flow: Wraps lower runtime modules into directly executable
+    #   operational scripts.
 
     def feed(self, text: str):
         complete = []
@@ -63,7 +118,16 @@ class JsonChunkAssembler:
                     complete.append(self.buffer)
                     self.buffer = ""
         return complete
-
+# Function purpose: Parses args into structured values.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Monitor the SHT45 pod over BLE.")
@@ -78,7 +142,17 @@ def parse_args():
 
 
 JSON_ASSEMBLER = JsonChunkAssembler()
-
+# Function purpose: Implements the on notify step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as _, data, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def on_notify(_, data: bytearray):
     text = data.decode("utf-8", errors="ignore")
@@ -88,7 +162,17 @@ def on_notify(_, data: bytearray):
             print("json:", json.loads(message))
         except json.JSONDecodeError:
             pass
-
+# Function purpose: Lists devices for later iteration or selection.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as scan_timeout, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 async def list_devices(scan_timeout: float):
     print(f"Using firmware config: {CONFIG_PATH}")
@@ -102,7 +186,17 @@ async def list_devices(scan_timeout: float):
             adv.service_uuids or [],
         )
     return devices
-
+# Function purpose: Finds target for later processing.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as name, address, scan_timeout, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 async def find_target(name: str, address: str, scan_timeout: float):
     if address:
@@ -118,7 +212,17 @@ async def find_target(name: str, address: str, scan_timeout: float):
         if local_name == name or SERVICE_UUID in uuids:
             return device
     return None
-
+# Function purpose: Dumps services for diagnostics or inspection.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as client, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def dump_services(client):
     print("Discovered services:")
@@ -126,7 +230,17 @@ def dump_services(client):
         print(" SERVICE", service.uuid, service.description)
         for char in service.characteristics:
             print("   CHAR", char.uuid, list(char.properties))
-
+# Function purpose: Implements the monitor step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as args, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns the computed value, structured record, or side effect defined
+#   by the implementation.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 async def monitor(args):
     if args.list_only:

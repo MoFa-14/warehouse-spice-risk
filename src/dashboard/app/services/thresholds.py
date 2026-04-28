@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Rule-based storage thresholds and severity classification.
+# - Project role: Builds route-ready view models, chart inputs, and interpretive
+#   summaries from loaded data.
+# - Main data or concerns: View models, chart series, classifications, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
+# - Why this matters: Keeping presentation logic here prevents routes and templates
+#   from reimplementing analysis rules.
+
 """Rule-based storage thresholds and severity classification.
 
 This module defines the storage-condition interpretation language used across
@@ -24,7 +35,15 @@ RH_IDEAL_MAX = 50.0
 RH_WARN_HIGH = 50.0
 RH_HIGH_RISK = 60.0
 RH_MOLD_CRIT = 65.0
-
+# Class purpose: Metadata displayed for one alert level.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class AlertLevelDefinition:
@@ -37,7 +56,15 @@ class AlertLevelDefinition:
     color_hex: str
     description: str
     recommendation: str
-
+# Class purpose: Result of classifying one temperature/humidity pair.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class ClassificationResult:
@@ -51,7 +78,15 @@ class ClassificationResult:
     description: str
     recommendation: str
     reasons: tuple[str, ...]
-
+# Class purpose: Worst predicted classification found across a forecast trajectory.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 @dataclass(frozen=True)
 class TrajectoryClassificationResult:
@@ -110,7 +145,18 @@ LEVEL_DEFINITIONS = {
         recommendation="Immediate action required: isolate/relocate sensitive stock; reduce humidity/temperature; inspect for mold.",
     ),
 }
-
+# Function purpose: Classify one temperature/humidity pair into a storage-risk
+#   level.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as temp_c, rh_pct, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns ClassificationResult | None when the function completes
+#   successfully.
+# - Important decisions: The implementation encodes a project decision point that
+#   later evaluation, storage, or dashboard logic depends on directly.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def classify_storage_conditions(temp_c: float | None, rh_pct: float | None) -> ClassificationResult | None:
     """Classify one temperature/humidity pair into a storage-risk level.
@@ -186,7 +232,18 @@ def classify_storage_conditions(temp_c: float | None, rh_pct: float | None) -> C
         recommendation=definition.recommendation,
         reasons=reasons,
     )
-
+# Function purpose: Return the worst predicted classification across a forecast
+#   horizon.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as temp_forecast_c, rh_forecast_pct, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns TrajectoryClassificationResult | None when the function
+#   completes successfully.
+# - Important decisions: The implementation encodes a project decision point that
+#   later evaluation, storage, or dashboard logic depends on directly.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def classify_storage_trajectory(
     temp_forecast_c: Sequence[float | None],
@@ -211,7 +268,16 @@ def classify_storage_trajectory(
                 rh_pct=float(rh_pct),
             )
     return worst
-
+# Function purpose: Return the metadata used by the threshold-legend user interface.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns list[dict[str, object]] when the function completes
+#   successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def threshold_legend() -> list[dict[str, object]]:
     """Return the metadata used by the threshold-legend user interface."""
@@ -242,12 +308,30 @@ def threshold_legend() -> list[dict[str, object]]:
             ],
         },
     ]
-
+# Function purpose: Return metadata for a numeric alert level.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as level, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns AlertLevelDefinition when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def level_definition(level: int) -> AlertLevelDefinition:
     """Return metadata for a numeric alert level."""
     return LEVEL_DEFINITIONS[level]
-
+# Function purpose: Implements the is missing step used by this subsystem.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Keeping presentation logic here prevents routes and
+#   templates from reimplementing analysis rules.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to routes and templates.
 
 def _is_missing(value: float | None) -> bool:
     return value is None or (isinstance(value, float) and math.isnan(value))

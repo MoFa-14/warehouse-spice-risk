@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for review service behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import json
@@ -15,9 +24,29 @@ if str(DASHBOARD_ROOT) not in sys.path:
 
 from app.services.review_service import build_monitoring_review_context
 from app.services.timeseries_service import resolve_time_window
-
+# Class purpose: Groups related regression checks for MonitoringReviewService
+#   behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class MonitoringReviewServiceTests(unittest.TestCase):
+    # Test purpose: Verifies that review summary reports excursions trends and
+    #   recommendation events behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on MonitoringReviewServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_review_summary_reports_excursions_trends_and_recommendation_events(self) -> None:
         with TemporaryDirectory() as temp_dir:
             data_root = Path(temp_dir) / "data"

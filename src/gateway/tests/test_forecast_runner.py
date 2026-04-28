@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for forecast runner behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import csv
@@ -13,9 +22,27 @@ if str(SRC_DIR) not in sys.path:
 
 from gateway.forecast.runner import ForecastRunner
 from forecasting.models import EvaluationMetrics
-
+# Class purpose: Groups related regression checks for ForecastRunner behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class ForecastRunnerTests(unittest.TestCase):
+    # Test purpose: Verifies that CSV runner writes forecast evaluation and case
+    #   base behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastRunnerTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_csv_runner_writes_forecast_evaluation_and_case_base(self) -> None:
         with TemporaryDirectory() as temp_dir:
             data_root = Path(temp_dir)
@@ -50,6 +77,17 @@ class ForecastRunnerTests(unittest.TestCase):
             self.assertTrue((data_root / "ml" / "forecasts.jsonl").exists())
             self.assertTrue((data_root / "ml" / "evaluations.jsonl").exists())
             self.assertTrue((data_root / "ml" / "case_base.jsonl").exists())
+    # Test purpose: Verifies that forecast pod uses full three hour history
+    #   window and latest observation behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastRunnerTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_forecast_pod_uses_full_three_hour_history_window_and_latest_observation(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -85,6 +123,17 @@ class ForecastRunnerTests(unittest.TestCase):
             )
             self.assertAlmostEqual(bundle.feature_vector.values["temp_last"], 27.0, places=6)
             self.assertAlmostEqual(bundle.feature_vector.values["rh_last"], 49.6, places=6)
+    # Test purpose: Verifies that runner auto backfills cases and calibrates
+    #   from recent evaluations behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastRunnerTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_runner_auto_backfills_cases_and_calibrates_from_recent_evaluations(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -137,6 +186,16 @@ class ForecastRunnerTests(unittest.TestCase):
             self.assertAlmostEqual(calibrated.baseline.temp_forecast_c[0], uncalibrated_temp - 0.60, places=3)
             self.assertAlmostEqual(calibrated.baseline.rh_forecast_pct[0], uncalibrated_rh - 2.50, places=3)
             self.assertIn("Auto-calibrated using 3 recent evaluations", calibrated.baseline.notes)
+    # Test purpose: Verifies that recent bias ignores large error and incomplete
+    #   windows behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastRunnerTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_recent_bias_ignores_large_error_and_incomplete_windows(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -185,6 +244,17 @@ class ForecastRunnerTests(unittest.TestCase):
             self.assertAlmostEqual(bias.temp_c, 0.20, places=6)
             self.assertAlmostEqual(bias.rh_pct, -0.40, places=6)
             self.assertEqual(bias.sample_count, 3)
+    # Test purpose: Verifies that runner backfills missing persistence metrics
+    #   for existing evaluations behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastRunnerTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_runner_backfills_missing_persistence_metrics_for_existing_evaluations(self) -> None:
         with TemporaryDirectory() as temp_dir:

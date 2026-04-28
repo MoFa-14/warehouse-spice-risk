@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for diagnostics behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import sys
@@ -11,9 +20,27 @@ if str(SRC_DIR) not in sys.path:
 
 from gateway.link.diagnostics import diagnostics_in_range
 from gateway.storage.sqlite_db import connect_sqlite, init_db
-
+# Class purpose: Groups related regression checks for DiagnosticsSummary behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class DiagnosticsSummaryTests(unittest.TestCase):
+    # Test purpose: Verifies that diagnostics summary reports link resend and
+    #   drift metrics behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on DiagnosticsSummaryTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_diagnostics_summary_reports_link_resend_and_drift_metrics(self) -> None:
         with TemporaryDirectory() as temp_dir:
             db_path = Path(temp_dir) / "telemetry.sqlite"

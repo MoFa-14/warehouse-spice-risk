@@ -1,3 +1,13 @@
+# File overview:
+# - Responsibility: CLI entrypoint for the concurrent multi-pod gateway test mode.
+# - Project role: Exposes operator-facing commands for gateway runtime, storage, and
+#   forecasting tasks.
+# - Main data or concerns: CLI arguments, runtime options, and command outcomes.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
+# - Why this matters: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+
 """CLI entrypoint for the concurrent multi-pod gateway test mode."""
 
 from __future__ import annotations
@@ -13,7 +23,16 @@ from gateway.multi.orchestrator import MultiGatewayOrchestrator, MultiGatewaySet
 
 
 LOGGER = logging.getLogger(__name__)
-
+# Function purpose: Parses args into structured values.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Warehouse Spice Risk gateway multi-pod tools")
@@ -56,7 +75,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         if args.temp_min_c >= args.temp_max_c:
             parser.error("--temp-min-c must be lower than --temp-max-c.")
     return args
-
+# Function purpose: Implements the configure logging step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as verbose, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def configure_logging(verbose: bool) -> None:
     logging.basicConfig(
@@ -66,7 +95,16 @@ def configure_logging(verbose: bool) -> None:
     logging.getLogger("gateway").setLevel(logging.DEBUG if verbose else logging.INFO)
     logging.getLogger("bleak").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-
+# Function purpose: Implements the async main step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as args, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 async def async_main(args: argparse.Namespace) -> int:
     if args.command != "multi":
@@ -90,7 +128,16 @@ async def async_main(args: argparse.Namespace) -> int:
     )
     runtime = MultiGatewayOrchestrator(settings)
     return await runtime.run()
-
+# Function purpose: Implements the CLI step used by this subsystem.
+# - Project role: Belongs to the gateway CLI entry-point layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Operational workflows remain reproducible when the CLI
+#   documents the same runtime paths used elsewhere.
+# - Related flow: Receives command-line arguments and dispatches to gateway
+#   services.
 
 def cli(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)

@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Synthetic warehouse microclimate model for pod 02.
+# - Project role: Generates simulated pod behavior, schedules, faults, and
+#   environmental patterns.
+# - Main data or concerns: Synthetic sensor values, schedules, weather trends, and
+#   simulated disturbances.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
+# - Why this matters: Simulation modules matter because they extend the single
+#   physical pod into a multi-zone experimental system.
+
 """Synthetic warehouse microclimate model for pod 02."""
 
 from __future__ import annotations
@@ -11,7 +22,15 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from sim.schedule import ActiveHoursSchedule
 from sim.weather import IndoorClimateTarget, bristol_indoor_target
 from sim.zone_profiles import ZoneProfile
-
+# Class purpose: Resolved generation parameters for one synthetic zone.
+# - Project role: Belongs to the synthetic pod simulation layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 @dataclass(frozen=True)
 class MicroclimateConfig:
@@ -47,7 +66,15 @@ class MicroclimateConfig:
     flags: int = 0
     disturbance_temp_threshold_c: float = 0.10
     disturbance_rh_threshold_pct: float = 0.35
-
+# Class purpose: One generated telemetry sample plus modeling context for logging.
+# - Project role: Belongs to the synthetic pod simulation layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 @dataclass(frozen=True)
 class GeneratedTelemetrySample:
@@ -65,6 +92,17 @@ class GeneratedTelemetrySample:
     active_hours: bool
     baseline_temp_c: float
     baseline_rh_pct: float
+    # Method purpose: Return the wire payload consumed by the gateway.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on GeneratedTelemetrySample.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns dict[str, object] when the function completes
+    #   successfully.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     def to_payload(self) -> dict[str, object]:
         """Return the wire payload consumed by the gateway."""
@@ -76,7 +114,16 @@ class GeneratedTelemetrySample:
             "rh_pct": round(self.rh_pct, 3),
             "flags": self.flags,
         }
-
+# Class purpose: Generate time-varying warehouse microclimates with disturbances and
+#   recovery.
+# - Project role: Belongs to the synthetic pod simulation layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 @dataclass
 class SyntheticTelemetryGenerator:
@@ -91,6 +138,26 @@ class SyntheticTelemetryGenerator:
     rh_drift_pct: float = 0.0
     disturbance_temp_c: float = 0.0
     disturbance_rh_pct: float = 0.0
+    # Method purpose: Implements the from zone profile step used by this
+    #   subsystem.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: Arguments such as pod_id, interval_s, zone_profile, base_temp_c,
+    #   base_rh_pct, noise_temp_c, noise_rh_pct, drift_temp_step_c,
+    #   drift_rh_step_pct, event_rate_per_hour,
+    #   event_rate_active_hours_per_hour, event_spike_temp_c,
+    #   event_spike_rh_pct, recovery_tau_seconds,
+    #   baseline_reversion_tau_seconds, seasonal_temp_weight,
+    #   seasonal_rh_weight, diurnal_temp_weight, diurnal_rh_weight,
+    #   timezone_name, start_local_time, schedule, rng, interpreted according to
+    #   the rules encoded in the body below.
+    # - Outputs: Returns 'SyntheticTelemetryGenerator' when the function
+    #   completes successfully.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     @classmethod
     def from_zone_profile(
@@ -177,6 +244,18 @@ class SyntheticTelemetryGenerator:
             start_local_time=resolved_start_local_time,
         )
         return cls(config=config, schedule=schedule or ActiveHoursSchedule(), rng=rng or random.Random())
+    # Method purpose: Generate the next telemetry sample for this synthetic
+    #   warehouse zone.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns GeneratedTelemetrySample when the function completes
+    #   successfully.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     def next_sample(self) -> GeneratedTelemetrySample:
         """Generate the next telemetry sample for this synthetic warehouse zone."""
@@ -240,6 +319,18 @@ class SyntheticTelemetryGenerator:
             baseline_temp_c=baseline_temp_c,
             baseline_rh_pct=baseline_rh_pct,
         )
+    # Method purpose: Implements the update drift step used by this subsystem.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: Arguments such as dt, target_temp_c, target_rh_pct, interpreted
+    #   according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     def _update_drift(self, dt: float, target_temp_c: float, target_rh_pct: float) -> None:
         target_temp_drift_c = target_temp_c - self.config.base_temp_c
@@ -259,12 +350,38 @@ class SyntheticTelemetryGenerator:
             -self.config.drift_rh_limit_pct,
             self.config.drift_rh_limit_pct,
         )
+    # Method purpose: Implements the recover disturbance step used by this
+    #   subsystem.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: Arguments such as dt, interpreted according to the rules encoded
+    #   in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     def _recover_disturbance(self, dt: float) -> None:
         tau = max(1.0, float(self.config.recovery_tau_seconds))
         factor = math.exp(-dt / tau)
         self.disturbance_temp_c *= factor
         self.disturbance_rh_pct *= factor
+    # Method purpose: Implements the maybe trigger event step used by this
+    #   subsystem.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: Arguments such as dt, event_rate_per_hour, baseline_temp_c,
+    #   baseline_rh_pct, outdoor_temp_c, outdoor_rh_pct, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: Returns bool when the function completes successfully.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     def _maybe_trigger_event(
         self,
@@ -296,6 +413,18 @@ class SyntheticTelemetryGenerator:
             rh_direction * self.config.event_spike_rh_pct * rh_scale * self.rng.uniform(0.90, 1.10)
         )
         return True
+    # Method purpose: Implements the current target step used by this subsystem.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: Arguments such as active_hours, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns IndoorClimateTarget when the function completes
+    #   successfully.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     def _current_target(self, active_hours: bool) -> IndoorClimateTarget:
         local_time = self.config.start_local_time + timedelta(seconds=self.uptime_s)
@@ -316,22 +445,64 @@ class SyntheticTelemetryGenerator:
             outdoor_temp_c=target.outdoor_temp_c,
             outdoor_rh_pct=target.outdoor_rh_pct,
         )
+    # Method purpose: Implements the schedule hour offset step used by this
+    #   subsystem.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     def _schedule_hour_offset(self) -> float:
         start = self.config.start_local_time
         return start.hour + (start.minute / 60.0) + (start.second / 3600.0)
+    # Method purpose: Constrains clamp to the safe range expected by later
+    #   logic.
+    # - Project role: Belongs to the synthetic pod simulation layer and acts as
+    #   a method on SyntheticTelemetryGenerator.
+    # - Inputs: Arguments such as value, lower, upper, interpreted according to
+    #   the rules encoded in the body below.
+    # - Outputs: Returns float when the function completes successfully.
+    # - Important decisions: Simulation logic needs explicit assumptions because
+    #   generated telemetry is later interpreted as if it were a real pod
+    #   stream.
+    # - Related flow: Produces synthetic telemetry and fault patterns for
+    #   gateway and dashboard exercise.
 
     @staticmethod
     def _clamp(value: float, lower: float, upper: float) -> float:
         return max(lower, min(upper, value))
-
+# Function purpose: Resolves zoneinfo into the concrete value used later.
+# - Project role: Belongs to the synthetic pod simulation layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as timezone_name, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: Returns ZoneInfo | None when the function completes successfully.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 def _resolve_zoneinfo(timezone_name: str) -> ZoneInfo | None:
     try:
         return ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
         return None
-
+# Function purpose: Implements the default start local time step used by this
+#   subsystem.
+# - Project role: Belongs to the synthetic pod simulation layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as zoneinfo, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns datetime when the function completes successfully.
+# - Important decisions: Simulation logic needs explicit assumptions because
+#   generated telemetry is later interpreted as if it were a real pod stream.
+# - Related flow: Produces synthetic telemetry and fault patterns for gateway and
+#   dashboard exercise.
 
 def _default_start_local_time(zoneinfo: ZoneInfo | None) -> datetime:
     if zoneinfo is None:

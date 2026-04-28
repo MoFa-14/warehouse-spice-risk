@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Run an offline historical forecast report without touching the
+#   live forecast loop.
+# - Project role: Provides convenience entry points for monitoring, forecasting, and
+#   evaluation workflows.
+# - Main data or concerns: Command-line options, runtime handles, and script-level
+#   control flow.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
+# - Why this matters: Scripts matter because they are the shortest operational path
+#   into the project for routine runs.
+
 """Run an offline historical forecast report without touching the live forecast loop."""
 
 from __future__ import annotations
@@ -30,7 +42,15 @@ from forecasting.utils import floor_to_interval, parse_utc, to_utc_iso
 UTC = timezone.utc
 DEFAULT_DB_PATH = ROOT / "src" / "data" / "db" / "telemetry.sqlite"
 DEFAULT_RESULTS_DIR = ROOT / "evaluation" / "results"
-
+# Class purpose: Encapsulates the CoverageDay responsibilities used by this module.
+# - Project role: Belongs to the operator automation script layer and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 @dataclass(frozen=True)
 class CoverageDay:
@@ -40,7 +60,15 @@ class CoverageDay:
     shared_end_utc: str
     shared_span_hours: float
     pod_sample_counts: dict[str, int]
-
+# Function purpose: Parses args into structured values.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -60,7 +88,16 @@ def parse_args() -> argparse.Namespace:
         help="Cadence used to build earlier no-leakage analogue cases before the selected day.",
     )
     return parser.parse_args()
-
+# Function purpose: Dispatches the top-level script entry point and forwards
+#   command-line arguments into the underlying runtime path.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def main() -> int:
     args = parse_args()
@@ -259,7 +296,16 @@ def main() -> int:
 
     print(json.dumps({"forecast_metrics": forecast_payload["summary"], "baseline_comparison": comparison_summary}, indent=2))
     return 0
-
+# Function purpose: Implements the shared coverage days step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as db_path, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns list[CoverageDay] when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _shared_coverage_days(db_path: Path) -> list[CoverageDay]:
     connection = sqlite3.connect(db_path)
@@ -298,7 +344,16 @@ def _shared_coverage_days(db_path: Path) -> list[CoverageDay]:
             )
         )
     return coverage_days
-
+# Function purpose: Selects day according to the rules implemented below.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as days, requested_day, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns CoverageDay when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _select_day(days: list[CoverageDay], requested_day: str | None) -> CoverageDay:
     if requested_day is None:
@@ -307,7 +362,17 @@ def _select_day(days: list[CoverageDay], requested_day: str | None) -> CoverageD
         if item.day == requested_day:
             return item
     raise SystemExit(f"Requested day {requested_day!r} is not available with shared two-pod coverage.")
-
+# Function purpose: Implements the seed cases step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as adapter, db_path, seed_cutoff_utc, config,
+#   step_minutes, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, list[CaseRecord]] when the function completes
+#   successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _seed_cases(
     *,
@@ -361,7 +426,16 @@ def _seed_cases(
             )
             current += timedelta(minutes=step_minutes)
     return result
-
+# Function purpose: Implements the candidate times step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as selected_day, history_minutes, horizon_minutes,
+#   step_minutes, interpreted according to the rules encoded in the body below.
+# - Outputs: Returns Iterable[datetime] when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _candidate_times(
     *,
@@ -378,7 +452,16 @@ def _candidate_times(
     while current <= end:
         yield current
         current += timedelta(minutes=step_minutes)
-
+# Function purpose: Implements the usable cases before step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as cases, forecast_time, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns list[CaseRecord] when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _usable_cases_before(cases: list[CaseRecord], forecast_time: datetime) -> list[CaseRecord]:
     cutoff = to_utc_iso(forecast_time)
@@ -387,7 +470,19 @@ def _usable_cases_before(cases: list[CaseRecord], forecast_time: datetime) -> li
         for case in cases
         if case.ts_pc_utc < cutoff and (case.event_label or "none") in {"", "none"}
     ]
-
+# Function purpose: Builds persistence trajectory for the next stage of the project
+#   flow.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as history_points, horizon_minutes, interpreted according
+#   to the rules encoded in the body below.
+# - Outputs: Returns dict[str, list[float]] when the function completes
+#   successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _build_persistence_trajectory(history_points: list[TimeSeriesPoint], horizon_minutes: int) -> dict[str, list[float]]:
     observed_points = [point for point in history_points if point.observed]
@@ -400,7 +495,17 @@ def _build_persistence_trajectory(history_points: list[TimeSeriesPoint], horizon
         "rh_forecast_pct": rh_series,
         "dew_point_forecast_c": dew_series,
     }
-
+# Function purpose: Implements the series metrics step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as predicted_temp, actual_temp, predicted_rh, actual_rh,
+#   predicted_dew, actual_dew, interpreted according to the rules encoded in the
+#   body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _series_metrics(
     predicted_temp: list[float],
@@ -431,7 +536,16 @@ def _series_metrics(
         "dew_rmse": _rmse_from_sq(dew_sq),
         "point_count": len(temp_abs),
     }
-
+# Function purpose: Implements the bucket map step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns dict[str, dict[str, object]] when the function completes
+#   successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _bucket_map() -> dict[str, dict[str, object]]:
     return defaultdict(
@@ -446,7 +560,17 @@ def _bucket_map() -> dict[str, dict[str, object]]:
             "dew_sq_sum": 0.0,
         }
     )
-
+# Function purpose: Implements the update bucket step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as bucket, metrics, interpreted according to the rules
+#   encoded in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _update_bucket(bucket: dict[str, object], metrics: dict[str, object]) -> None:
     bucket["windows"] += 1
@@ -457,11 +581,32 @@ def _update_bucket(bucket: dict[str, object], metrics: dict[str, object]) -> Non
     bucket["rh_sq_sum"] += sum(metrics["rh_sq_errors"])
     bucket["dew_abs_sum"] += sum(metrics["dew_abs_errors"])
     bucket["dew_sq_sum"] += sum(metrics["dew_sq_errors"])
-
+# Function purpose: Implements the summaries from buckets step used by this
+#   subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as buckets, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns dict[str, dict[str, object]] when the function completes
+#   successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _summaries_from_buckets(buckets: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
     return {key: _summarize_bucket(bucket) for key, bucket in buckets.items() if bucket["windows"] > 0}
-
+# Function purpose: Summarizes bucket for later interpretation.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as bucket, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _summarize_bucket(bucket: dict[str, object]) -> dict[str, object]:
     points = int(bucket["points"])
@@ -475,7 +620,17 @@ def _summarize_bucket(bucket: dict[str, object]) -> dict[str, object]:
         "dew_mae": 0.0 if points == 0 else float(bucket["dew_abs_sum"]) / points,
         "dew_rmse": 0.0 if points == 0 else math.sqrt(float(bucket["dew_sq_sum"]) / points),
     }
-
+# Function purpose: Implements the comparison summary step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as implemented_summary, persistence_summary, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns dict[str, dict[str, object]] when the function completes
+#   successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _comparison_summary(
     implemented_summary: dict[str, dict[str, object]],
@@ -499,7 +654,17 @@ def _comparison_summary(
             },
         }
     return rows
-
+# Function purpose: Implements the better than persistence step used by this
+#   subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as implemented, persistence, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _better_than_persistence(implemented: dict[str, object], persistence: dict[str, object]) -> str:
     metrics = ("temp_mae", "temp_rmse", "rh_mae", "rh_rmse")
@@ -509,7 +674,16 @@ def _better_than_persistence(implemented: dict[str, object], persistence: dict[s
     if not any(better):
         return "No"
     return "Mixed"
-
+# Function purpose: Implements the percent improvement step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as baseline, candidate, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _percent_improvement(baseline: object, candidate: object) -> float | None:
     baseline_value = float(baseline)
@@ -517,15 +691,43 @@ def _percent_improvement(baseline: object, candidate: object) -> float | None:
     if baseline_value == 0.0:
         return None
     return ((baseline_value - candidate_value) / baseline_value) * 100.0
-
+# Function purpose: Implements the MAE from abs step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as values, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns float when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _mae_from_abs(values: list[float]) -> float:
     return 0.0 if not values else sum(values) / float(len(values))
-
+# Function purpose: Implements the RMSE from sq step used by this subsystem.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as values, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns float when the function completes successfully.
+# - Important decisions: Scripts matter because they are the shortest operational
+#   path into the project for routine runs.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _rmse_from_sq(values: list[float]) -> float:
     return 0.0 if not values else math.sqrt(sum(values) / float(len(values)))
-
+# Function purpose: Writes CSV into the configured destination.
+# - Project role: Belongs to the operator automation script layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as path, rows, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Wraps lower runtime modules into directly executable operational
+#   scripts.
 
 def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
     if not rows:

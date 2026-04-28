@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Central forecasting configuration shared across ML, gateway, and
+#   dashboard.
+# - Project role: Defines feature extraction, analogue matching, scenario
+#   generation, evaluation, and forecasting utilities.
+# - Main data or concerns: Feature vectors, trajectories, event labels, metrics, and
+#   model configuration.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
+# - Why this matters: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+
 """Central forecasting configuration shared across ML, gateway, and dashboard.
 
 This file is important for viva explanation because it captures many of the
@@ -21,7 +33,15 @@ from dataclasses import dataclass, field
 
 
 MODEL_VERSION = "forecasting-v1"
-
+# Class purpose: Fixed windows, thresholds, and storage-independent settings.
+# - Project role: Belongs to the forecast model and evaluation layer and groups
+#   related state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: The forecast pipeline depends on these modules to keep the
+#   predictive transformation path explicit.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 @dataclass(frozen=True)
 class ForecastConfig:
@@ -95,7 +115,17 @@ class ForecastConfig:
             "hour_cos": 0.9,
         }
     )
-
+# Function purpose: Build a validated config from CLI-level overrides.
+# - Project role: Belongs to the forecast model and evaluation layer and contributes
+#   one focused step within that subsystem.
+# - Inputs: Arguments such as k, missing_rate_max, history_minutes, horizon_minutes,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns ForecastConfig when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Consumes forecast-ready telemetry windows and passes trajectories
+#   or metrics to gateway orchestration.
 
 def build_config(
     *,

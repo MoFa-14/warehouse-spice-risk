@@ -1,3 +1,15 @@
+# File overview:
+# - Responsibility: Backfill historical CSV telemetry into the primary SQLite
+#   database.
+# - Project role: Stores raw telemetry, link diagnostics, and exportable datasets in
+#   canonical formats.
+# - Main data or concerns: SQLite rows, CSV rows, schema definitions, and storage
+#   paths.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
+# - Why this matters: Persistence code matters because the rest of the project only
+#   sees what this layer records and exposes.
+
 """Backfill historical CSV telemetry into the primary SQLite database."""
 
 from __future__ import annotations
@@ -12,7 +24,15 @@ from gateway.storage.paths import build_storage_paths
 from gateway.storage.schema import parse_quality_mask, quality_mask_to_flags
 from gateway.protocol.validation import format_quality_flags
 from gateway.storage.sqlite_db import connect_sqlite, initialize_schema, resolve_db_path
-
+# Class purpose: Summary of a CSV-to-SQLite backfill run.
+# - Project role: Belongs to the gateway persistence layer and groups related state
+#   or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 @dataclass
 class CsvImportResult:
@@ -26,7 +46,15 @@ class CsvImportResult:
     link_rows_inserted: int = 0
     link_duplicates: int = 0
     link_rows_skipped: int = 0
-
+# Class purpose: One historical sample row parsed from CSV.
+# - Project role: Belongs to the gateway persistence layer and groups related state
+#   or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 @dataclass(frozen=True)
 class _ImportedSample:
@@ -42,11 +70,29 @@ class _ImportedSample:
     rssi: int | None
     quality_flags: tuple[str, ...]
     sort_index: int
+    # Method purpose: Implements the identity key step used by this subsystem.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on _ImportedSample.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns tuple[str, str, int, float] when the function completes
+    #   successfully.
+    # - Important decisions: Persistence code matters because the rest of the
+    #   project only sees what this layer records and exposes.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     @property
     def identity_key(self) -> tuple[str, str, int, float]:
         return (self.pod_id, self.ts_pc_utc, self.seq, round(self.ts_uptime_s, 6))
-
+# Class purpose: One historical link-quality row parsed from CSV.
+# - Project role: Belongs to the gateway persistence layer and groups related state
+#   or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 @dataclass(frozen=True)
 class _ImportedLinkSnapshot:
@@ -54,6 +100,16 @@ class _ImportedLinkSnapshot:
 
     snapshot: LinkSnapshot
     sort_index: int
+    # Method purpose: Implements the identity key step used by this subsystem.
+    # - Project role: Belongs to the gateway persistence layer and acts as a
+    #   method on _ImportedLinkSnapshot.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns tuple[str, str, int, int | None, int, int, int, int,
+    #   int, float] when the function completes successfully.
+    # - Important decisions: Persistence code matters because the rest of the
+    #   project only sees what this layer records and exposes.
+    # - Related flow: Receives normalized gateway records and passes stored
+    #   evidence to forecasting and dashboard loaders.
 
     @property
     def identity_key(self) -> tuple[str, str, int, int | None, int, int, int, int, int, float]:
@@ -70,7 +126,18 @@ class _ImportedLinkSnapshot:
             row.reconnect_count,
             round(row.missing_rate, 6),
         )
-
+# Function purpose: Copy historical CSV storage into SQLite without modifying the
+#   original files.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, include_link_quality,
+#   include_legacy_logs, pod_ids, interpreted according to the rules encoded in the
+#   body below.
+# - Outputs: Returns CsvImportResult when the function completes successfully.
+# - Important decisions: Persistence-facing code centralizes storage rules so other
+#   modules do not duplicate schema or serialization assumptions.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def import_csv_history(
     *,
@@ -148,7 +215,19 @@ def import_csv_history(
         connection.close()
 
     return result
-
+# Function purpose: Loads sample rows into the structure expected by downstream
+#   code.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as storage_paths, include_legacy_logs, pod_filter,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns tuple[list[_ImportedSample], int] when the function completes
+#   successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _load_sample_rows(
     *,
@@ -176,7 +255,18 @@ def _load_sample_rows(
 
     rows.sort(key=lambda row: (row.pod_id, row.ts_pc_utc, row.ts_uptime_s, row.seq, row.sort_index))
     return rows, skipped
-
+# Function purpose: Loads link rows into the structure expected by downstream code.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as storage_paths, include_legacy_logs, pod_filter,
+#   interpreted according to the rules encoded in the body below.
+# - Outputs: Returns tuple[list[_ImportedLinkSnapshot], int] when the function
+#   completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _load_link_rows(
     *,
@@ -204,7 +294,16 @@ def _load_link_rows(
 
     rows.sort(key=lambda row: (row.snapshot.pod_id, row.snapshot.ts_pc_utc, row.sort_index))
     return rows, skipped
-
+# Function purpose: Implements the sample CSV paths step used by this subsystem.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as storage_paths, include_legacy_logs, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _sample_csv_paths(*, storage_paths, include_legacy_logs: bool) -> list[Path]:
     paths = sorted(storage_paths.raw_pods_root.glob("*/*.csv"))
@@ -213,7 +312,16 @@ def _sample_csv_paths(*, storage_paths, include_legacy_logs: bool) -> list[Path]
         if legacy_samples.exists():
             paths.append(legacy_samples)
     return paths
-
+# Function purpose: Implements the link CSV paths step used by this subsystem.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as storage_paths, include_legacy_logs, interpreted
+#   according to the rules encoded in the body below.
+# - Outputs: Returns list[Path] when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _link_csv_paths(*, storage_paths, include_legacy_logs: bool) -> list[Path]:
     paths = sorted(storage_paths.raw_link_quality_root.glob("*.csv"))
@@ -222,7 +330,16 @@ def _link_csv_paths(*, storage_paths, include_legacy_logs: bool) -> list[Path]:
         if legacy_link_quality.exists():
             paths.append(legacy_link_quality)
     return paths
-
+# Function purpose: Parses sample row into structured values.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as raw_row, sort_index, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns _ImportedSample when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _parse_sample_row(*, raw_row: dict[str, str], sort_index: int) -> _ImportedSample:
     ts_pc_utc = str(raw_row["ts_pc_utc"]).strip()
@@ -246,7 +363,16 @@ def _parse_sample_row(*, raw_row: dict[str, str], sort_index: int) -> _ImportedS
         quality_flags=quality_mask_to_flags(quality_mask),
         sort_index=sort_index,
     )
-
+# Function purpose: Parses link row into structured values.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as raw_row, sort_index, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns _ImportedLinkSnapshot when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _parse_link_row(*, raw_row: dict[str, str], sort_index: int) -> _ImportedLinkSnapshot:
     snapshot = LinkSnapshot(
@@ -262,7 +388,19 @@ def _parse_link_row(*, raw_row: dict[str, str], sort_index: int) -> _ImportedLin
         missing_rate=float(str(raw_row.get("missing_rate", "0") or "0").strip()),
     )
     return _ImportedLinkSnapshot(snapshot=snapshot, sort_index=sort_index)
-
+# Function purpose: Loads existing sample keys into the structure expected by
+#   downstream code.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns set[tuple[str, str, int, float]] when the function completes
+#   successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _load_existing_sample_keys(connection) -> set[tuple[str, str, int, float]]:
     return {
@@ -276,7 +414,19 @@ def _load_existing_sample_keys(connection) -> set[tuple[str, str, int, float]]:
             "SELECT pod_id, ts_pc_utc, seq, ts_uptime_s FROM samples_raw"
         ).fetchall()
     }
-
+# Function purpose: Loads existing link keys into the structure expected by
+#   downstream code.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns set[tuple[str, str, int, int | None, int, int, int, int, int,
+#   float]] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _load_existing_link_keys(
     connection,
@@ -302,7 +452,18 @@ def _load_existing_link_keys(
             """
         ).fetchall()
     }
-
+# Function purpose: Loads minimum session ids into the structure expected by
+#   downstream code.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns dict[str, int] when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _load_minimum_session_ids(connection) -> dict[str, int]:
     return {
@@ -311,7 +472,18 @@ def _load_minimum_session_ids(connection) -> dict[str, int]:
             "SELECT pod_id, MIN(session_id) AS minimum_session_id FROM samples_raw GROUP BY pod_id"
         ).fetchall()
     }
-
+# Function purpose: Implements the plan sample sessions step used by this subsystem.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as sample_rows, existing_sample_keys,
+#   minimum_session_by_pod, interpreted according to the rules encoded in the body
+#   below.
+# - Outputs: Returns dict[tuple[str, str, int, float], int] when the function
+#   completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _plan_sample_sessions(
     *,
@@ -349,7 +521,16 @@ def _plan_sample_sessions(
                 planned_by_key[row.identity_key] = session_id
 
     return planned_by_key
-
+# Function purpose: Implements the is session reset step used by this subsystem.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as previous_row, current_row, interpreted according to
+#   the rules encoded in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _is_session_reset(previous_row: _ImportedSample, current_row: _ImportedSample) -> bool:
     if current_row.ts_uptime_s + 1.0 < previous_row.ts_uptime_s:
@@ -357,7 +538,16 @@ def _is_session_reset(previous_row: _ImportedSample, current_row: _ImportedSampl
     if current_row.seq == 1 and previous_row.seq > 1:
         return True
     return False
-
+# Function purpose: Implements the insert sample step used by this subsystem.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, sample, session_id, interpreted according
+#   to the rules encoded in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _insert_sample(*, connection, sample: _ImportedSample, session_id: int) -> bool:
     cursor = connection.execute(
@@ -382,7 +572,16 @@ def _insert_sample(*, connection, sample: _ImportedSample, session_id: int) -> b
     )
     connection.commit()
     return cursor.rowcount == 1
-
+# Function purpose: Implements the insert link snapshot step used by this subsystem.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as connection, snapshot, interpreted according to the
+#   rules encoded in the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Persistence code matters because the rest of the project
+#   only sees what this layer records and exposes.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _insert_link_snapshot(*, connection, snapshot: LinkSnapshot) -> bool:
     cursor = connection.execute(
@@ -407,28 +606,66 @@ def _insert_link_snapshot(*, connection, snapshot: LinkSnapshot) -> bool:
     )
     connection.commit()
     return cursor.rowcount == 1
-
+# Function purpose: Normalizes pod identifier into the subsystem's stable
+#   representation.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: The transformation rules here define how later code
+#   interprets the same data, so the shape of the output needs to stay stable and
+#   reproducible.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _normalize_pod_id(value: object) -> str:
     text = str(value).strip()
     if text.upper().startswith("SHT45-POD-"):
         return text.rsplit("-", maxsplit=1)[-1]
     return text
-
+# Function purpose: Parses optional float into structured values.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _parse_optional_float(value: object) -> float | None:
     text = str(value).strip()
     if not text or text.lower() in {"none", "null", "nan"}:
         return None
     return float(text)
-
+# Function purpose: Parses optional int into structured values.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int | None when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _parse_optional_int(value: object) -> int | None:
     text = str(value).strip()
     if not text or text.lower() in {"none", "null", "nan"}:
         return None
     return int(float(text))
-
+# Function purpose: Parses boolish into structured values.
+# - Project role: Belongs to the gateway persistence layer and contributes one
+#   focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns bool when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Receives normalized gateway records and passes stored evidence to
+#   forecasting and dashboard loaders.
 
 def _parse_boolish(value: object) -> bool:
     text = str(value).strip().lower()

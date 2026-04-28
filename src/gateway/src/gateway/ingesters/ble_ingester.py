@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: BLE ingestion adapter for physical pods.
+# - Project role: Accepts live telemetry from transport-specific sources and
+#   converts it into normalized gateway records.
+# - Main data or concerns: Raw transport messages, decoded telemetry payloads, and
+#   connection events.
+# - Related flow: Receives BLE or TCP input and passes decoded records into routing
+#   and storage.
+# - Why this matters: All later persistence and forecasting logic depends on
+#   ingestion normalizing the live inputs correctly.
+
 """BLE ingestion adapter for physical pods.
 
 This module is the gateway-side counterpart to the pod firmware BLE service.
@@ -25,13 +36,31 @@ from gateway.utils.timeutils import utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
-
+# Function purpose: Implements the pod identifier from name step used by this
+#   subsystem.
+# - Project role: Belongs to the gateway ingestion layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as name, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns str when the function completes successfully.
+# - Important decisions: All later persistence and forecasting logic depends on
+#   ingestion normalizing the live inputs correctly.
+# - Related flow: Receives BLE or TCP input and passes decoded records into routing
+#   and storage.
 
 def _pod_id_from_name(name: str) -> str:
     parts = str(name).strip().split("-")
     candidate = parts[-1] if parts else name
     return candidate.zfill(2) if candidate.isdigit() else candidate
-
+# Class purpose: Configuration for the multi-pod BLE ingestion wrapper.
+# - Project role: Belongs to the gateway ingestion layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: All later persistence and forecasting logic depends on
+#   ingestion normalizing the live inputs correctly.
+# - Related flow: Receives BLE or TCP input and passes decoded records into routing
+#   and storage.
 
 @dataclass(frozen=True)
 class BleIngesterSettings:
@@ -46,7 +75,15 @@ class BleIngesterSettings:
     temp_min_c: float = -20.0
     temp_max_c: float = 80.0
     use_cached_services: bool = False
-
+# Class purpose: Manage one or more live BLE pod sessions.
+# - Project role: Belongs to the gateway ingestion layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: All later persistence and forecasting logic depends on
+#   ingestion normalizing the live inputs correctly.
+# - Related flow: Receives BLE or TCP input and passes decoded records into routing
+#   and storage.
 
 class BleIngester:
     """Manage one or more live BLE pod sessions.
@@ -57,6 +94,19 @@ class BleIngester:
     downstream validation, storage, forecasting, and dashboard logic can remain
     source-agnostic.
     """
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: Arguments such as queue, router, settings, interpreted according
+    #   to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def __init__(
         self,
@@ -86,6 +136,17 @@ class BleIngester:
         self.sessions: list[PodSession] = []
         self._session_tasks: list[asyncio.Task[None]] = []
         self._stop_event = asyncio.Event()
+    # Method purpose: Discover matching pods and launch one async session per
+    #   target.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     async def start(self) -> None:
         """Discover matching pods and launch one async session per target."""
@@ -115,6 +176,16 @@ class BleIngester:
         ]
         for task in self._session_tasks:
             task.add_done_callback(self._log_task_failure)
+    # Method purpose: Implements the stop step used by this subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     async def stop(self) -> None:
         self._stop_event.set()
@@ -126,6 +197,17 @@ class BleIngester:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
         self._session_tasks.clear()
+    # Method purpose: Periodically refresh RSSI so link-quality history stays
+    #   informative.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     async def refresh_rssi_loop(self) -> None:
         """Periodically refresh RSSI so link-quality history stays informative.
@@ -147,8 +229,33 @@ class BleIngester:
                         LOGGER.debug("RSSI refresh failed for %s: %s", session.target.address, result)
                     else:
                         self.router.update_rssi(_pod_id_from_name(session.target.name or session.target.address), "BLE", session.stats.last_rssi)
+    # Method purpose: Implements the make sample handler step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def _make_sample_handler(self):
+        # Method purpose: Implements the handle sample step used by this
+        #   subsystem.
+        # - Project role: Belongs to the gateway ingestion layer and acts as
+        #   a method on BleIngester.
+        # - Inputs: Arguments such as record, _quality_flags, stats,
+        #   timestamp, interpreted according to the rules encoded in the
+        #   body below.
+        # - Outputs: No direct return value; the function performs state
+        #   updates or side effects.
+        # - Important decisions: All later persistence and forecasting logic
+        #   depends on ingestion normalizing the live inputs correctly.
+        # - Related flow: Receives BLE or TCP input and passes decoded
+        #   records into routing and storage.
+
         async def _handle_sample(record, _quality_flags, stats, timestamp: str) -> None:
             # The BLE session already decoded the wire payload. At this point we
             # standardise the sample into the shared multi-source record format
@@ -169,26 +276,110 @@ class BleIngester:
             )
 
         return _handle_sample
+    # Method purpose: Implements the make corrupt handler step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: Arguments such as pod_id, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def _make_corrupt_handler(self, pod_id: str):
+        # Method purpose: Implements the handle corrupt step used by this
+        #   subsystem.
+        # - Project role: Belongs to the gateway ingestion layer and acts as
+        #   a method on BleIngester.
+        # - Inputs: No explicit arguments beyond module or instance context.
+        # - Outputs: No direct return value; the function performs state
+        #   updates or side effects.
+        # - Important decisions: All later persistence and forecasting logic
+        #   depends on ingestion normalizing the live inputs correctly.
+        # - Related flow: Receives BLE or TCP input and passes decoded
+        #   records into routing and storage.
+
         async def _handle_corrupt() -> None:
             await self.router.note_corrupt(pod_id, "BLE")
 
         return _handle_corrupt
+    # Method purpose: Implements the make connect handler step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: Arguments such as pod_id, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def _make_connect_handler(self, pod_id: str):
+        # Method purpose: Implements the handle connect step used by this
+        #   subsystem.
+        # - Project role: Belongs to the gateway ingestion layer and acts as
+        #   a method on BleIngester.
+        # - Inputs: Arguments such as is_reconnect, interpreted according to
+        #   the rules encoded in the body below.
+        # - Outputs: No direct return value; the function performs state
+        #   updates or side effects.
+        # - Important decisions: All later persistence and forecasting logic
+        #   depends on ingestion normalizing the live inputs correctly.
+        # - Related flow: Receives BLE or TCP input and passes decoded
+        #   records into routing and storage.
+
         async def _handle_connect(is_reconnect: bool) -> None:
             self.router.note_connected(pod_id, "BLE")
             if is_reconnect:
                 self.router.note_reconnect(pod_id, "BLE")
 
         return _handle_connect
+    # Method purpose: Implements the make disconnect handler step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: Arguments such as pod_id, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns the computed value, structured record, or side effect
+    #   defined by the implementation.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     def _make_disconnect_handler(self, pod_id: str):
+        # Method purpose: Implements the handle disconnect step used by this
+        #   subsystem.
+        # - Project role: Belongs to the gateway ingestion layer and acts as
+        #   a method on BleIngester.
+        # - Inputs: No explicit arguments beyond module or instance context.
+        # - Outputs: No direct return value; the function performs state
+        #   updates or side effects.
+        # - Important decisions: All later persistence and forecasting logic
+        #   depends on ingestion normalizing the live inputs correctly.
+        # - Related flow: Receives BLE or TCP input and passes decoded
+        #   records into routing and storage.
+
         async def _handle_disconnect() -> None:
             self.router.note_disconnected(pod_id, "BLE")
 
         return _handle_disconnect
+    # Method purpose: Resolve the set of pods that should be connected in this
+    #   run.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns list[PodTarget] when the function completes
+    #   successfully.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     async def _resolve_targets(self) -> list[PodTarget]:
         """Resolve the set of pods that should be connected in this run."""
@@ -199,6 +390,18 @@ class BleIngester:
             addresses=self.gateway_settings.addresses,
         )
         return [PodTarget(address=match.address, name=match.name) for match in matches]
+    # Method purpose: Implements the log task failure step used by this
+    #   subsystem.
+    # - Project role: Belongs to the gateway ingestion layer and acts as a
+    #   method on BleIngester.
+    # - Inputs: Arguments such as task, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: All later persistence and forecasting logic depends
+    #   on ingestion normalizing the live inputs correctly.
+    # - Related flow: Receives BLE or TCP input and passes decoded records into
+    #   routing and storage.
 
     @staticmethod
     def _log_task_failure(task: asyncio.Task[None]) -> None:

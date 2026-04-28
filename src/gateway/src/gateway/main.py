@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: CLI entrypoint for the Layer 2 BLE gateway with Layer 3 storage
+#   enabled.
+# - Project role: Defines configuration and top-level runtime wiring for live
+#   gateway operation.
+# - Main data or concerns: Runtime options, configuration values, and top-level
+#   service wiring.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
+# - Why this matters: Top-level runtime wiring determines how the live ingestion and
+#   storage path is assembled.
+
 """CLI entrypoint for the Layer 2 BLE gateway with Layer 3 storage enabled."""
 
 from __future__ import annotations
@@ -24,7 +35,15 @@ from gateway.utils.timeutils import utc_now_iso
 
 
 LOGGER = logging.getLogger(__name__)
-
+# Function purpose: Parse the gateway CLI arguments.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns argparse.Namespace when the function completes successfully.
+# - Important decisions: Parsing and validation code must make acceptance rules
+#   explicit because later storage and forecasting logic assume normalized payloads.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse the gateway CLI arguments."""
@@ -84,7 +103,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("--duration must be greater than 0 when provided.")
 
     return args
-
+# Function purpose: Set up a concise console logger for the gateway runtime.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as verbose, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: No direct return value; the function performs state updates or side
+#   effects.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 def configure_logging(verbose: bool) -> None:
     """Set up a concise console logger for the gateway runtime."""
@@ -95,7 +123,15 @@ def configure_logging(verbose: bool) -> None:
     logging.getLogger("gateway").setLevel(logging.DEBUG if verbose else logging.INFO)
     logging.getLogger("bleak").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-
+# Function purpose: Resolve the pod set to monitor for this run.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as settings, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns list[PodTarget] when the function completes successfully.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 async def resolve_initial_targets(settings: GatewaySettings) -> list[PodTarget]:
     """Resolve the pod set to monitor for this run."""
@@ -122,7 +158,15 @@ async def resolve_initial_targets(settings: GatewaySettings) -> list[PodTarget]:
         service_uuid=profile.service_uuid,
     )
     return [PodTarget(address=match.address, name=match.name) for match in matches]
-
+# Function purpose: Scan for matching pods and print the results.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as settings, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 async def run_scan_only(settings: GatewaySettings) -> int:
     """Scan for matching pods and print the results."""
@@ -146,7 +190,15 @@ async def run_scan_only(settings: GatewaySettings) -> int:
             f"FOUND name={match.name} address={match.address} rssi={match.rssi if match.rssi is not None else 'n/a'} services={services}"
         )
     return 0
-
+# Function purpose: Connect to one pod and print its discovered services.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as settings, interpreted according to the rules encoded
+#   in the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 async def run_dump_services(settings: GatewaySettings) -> int:
     """Connect to one pod and print its discovered services."""
@@ -182,10 +234,31 @@ async def run_dump_services(settings: GatewaySettings) -> int:
         if client.is_connected:
             with contextlib.suppress(Exception):
                 await client.disconnect()
-
+# Class purpose: Coordinate pod sessions, periodic RSSI refreshes, and persistent
+#   logging.
+# - Project role: Belongs to the gateway runtime layer and groups related state or
+#   behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 class GatewayRuntime:
     """Coordinate pod sessions, periodic RSSI refreshes, and persistent logging."""
+    # Method purpose: Initializes object state and attaches the dependencies or
+    #   values needed by later methods.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: Arguments such as settings, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Initialization must make dependencies and default
+    #   state explicit because later methods assume that setup has completed
+    #   correctly.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     def __init__(self, settings: GatewaySettings) -> None:
         self.settings = settings
@@ -201,6 +274,17 @@ class GatewayRuntime:
         self.sessions: list[PodSession] = []
         self._stop_event = asyncio.Event()
         self._fatal_task_error: BaseException | None = None
+    # Method purpose: Run the receiver until the duration elapses or the user
+    #   stops it.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: Arguments such as duration_s, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns int when the function completes successfully.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     async def run(self, duration_s: float | None) -> int:
         """Run the receiver until the duration elapses or the user stops it."""
@@ -276,6 +360,18 @@ class GatewayRuntime:
             self.process_lock.release()
 
         return 1 if self._fatal_task_error is not None else 0
+    # Method purpose: Builds writer pipeline for the next stage of the project
+    #   flow.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: Returns GatewayWriterPipeline | SqliteWriterPipeline when the
+    #   function completes successfully.
+    # - Important decisions: The transformation rules here define how later code
+    #   interprets the same data, so the shape of the output needs to stay
+    #   stable and reproducible.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     def _build_writer_pipeline(self) -> GatewayWriterPipeline | SqliteWriterPipeline:
         if self.settings.storage_backend == "sqlite":
@@ -284,6 +380,18 @@ class GatewayRuntime:
             storage_root=self.storage_paths.root,
             log_dir=self.settings.log_dir,
         )
+    # Method purpose: Persist a decoded sample into both canonical and
+    #   compatibility outputs.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: Arguments such as record, quality_flags, stats, timestamp,
+    #   interpreted according to the rules encoded in the body below.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     async def handle_sample(
         self,
@@ -302,6 +410,16 @@ class GatewayRuntime:
             rssi=stats.last_rssi,
             quality_flags=quality_flags,
         )
+    # Method purpose: Write periodic link metrics snapshots for every pod.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     async def link_snapshot_loop(self) -> None:
         """Write periodic link metrics snapshots for every pod."""
@@ -310,6 +428,17 @@ class GatewayRuntime:
                 await asyncio.wait_for(self._stop_event.wait(), timeout=self.settings.metrics_interval_s)
             except asyncio.TimeoutError:
                 await self.log_link_snapshots()
+    # Method purpose: Refresh last known RSSI values when the adapter exposes
+    #   them.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     async def rssi_poll_loop(self) -> None:
         """Refresh last known RSSI values when the adapter exposes them."""
@@ -324,6 +453,16 @@ class GatewayRuntime:
                 for session, result in zip(self.sessions, results):
                     if isinstance(result, Exception):
                         LOGGER.debug("RSSI refresh failed for %s: %s", session.target.address, result)
+    # Method purpose: Write one link metrics snapshot row per active pod.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; the function performs state updates or
+    #   side effects.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     async def log_link_snapshots(self) -> None:
         """Write one link metrics snapshot row per active pod."""
@@ -333,9 +472,32 @@ class GatewayRuntime:
         for session in self.sessions:
             snapshot = session.stats.snapshot(ts_pc_utc=timestamp)
             await self.writer_pipeline.enqueue_link_snapshot(snapshot)
+    # Method purpose: Creates guarded task in the form expected by later code.
+    # - Project role: Belongs to the gateway runtime layer and acts as a method
+    #   on GatewayRuntime.
+    # - Inputs: Arguments such as awaitable, name, interpreted according to the
+    #   rules encoded in the body below.
+    # - Outputs: Returns asyncio.Task[None] when the function completes
+    #   successfully.
+    # - Important decisions: Top-level runtime wiring determines how the live
+    #   ingestion and storage path is assembled.
+    # - Related flow: Connects lower gateway subsystems into runnable entry
+    #   points.
 
     def _create_guarded_task(self, awaitable: Awaitable[None], *, name: str) -> asyncio.Task[None]:
         task = asyncio.create_task(awaitable, name=name)
+        # Method purpose: Implements the on done step used by this
+        #   subsystem.
+        # - Project role: Belongs to the gateway runtime layer and acts as a
+        #   method on GatewayRuntime.
+        # - Inputs: Arguments such as completed, interpreted according to
+        #   the rules encoded in the body below.
+        # - Outputs: No direct return value; the function performs state
+        #   updates or side effects.
+        # - Important decisions: Top-level runtime wiring determines how the
+        #   live ingestion and storage path is assembled.
+        # - Related flow: Connects lower gateway subsystems into runnable
+        #   entry points.
 
         def _on_done(completed: asyncio.Task[None]) -> None:
             if completed.cancelled():
@@ -358,7 +520,15 @@ class GatewayRuntime:
 
         task.add_done_callback(_on_done)
         return task
-
+# Function purpose: Async CLI entrypoint used by the module and helper tools.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as args, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 async def async_main(args: argparse.Namespace) -> int:
     """Async CLI entrypoint used by the module and helper tools."""
@@ -384,7 +554,15 @@ async def async_main(args: argparse.Namespace) -> int:
 
     runtime = GatewayRuntime(settings)
     return await runtime.run(args.duration)
-
+# Function purpose: Synchronous CLI wrapper for python -m gateway.
+# - Project role: Belongs to the gateway runtime layer and contributes one focused
+#   step within that subsystem.
+# - Inputs: Arguments such as argv, interpreted according to the rules encoded in
+#   the body below.
+# - Outputs: Returns int when the function completes successfully.
+# - Important decisions: Top-level runtime wiring determines how the live ingestion
+#   and storage path is assembled.
+# - Related flow: Connects lower gateway subsystems into runnable entry points.
 
 def cli(argv: Sequence[str] | None = None) -> int:
     """Synchronous CLI wrapper for python -m gateway.main."""

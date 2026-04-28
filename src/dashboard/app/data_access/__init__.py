@@ -1,3 +1,14 @@
+# File overview:
+# - Responsibility: Data-access exports for the Flask dashboard.
+# - Project role: Loads persisted telemetry, forecast, or evaluation data into
+#   stable dashboard-facing tables.
+# - Main data or concerns: Telemetry rows, forecast rows, evaluation rows, and date
+#   or pod filters.
+# - Related flow: Reads stored files or database rows and passes normalized frames
+#   to dashboard services.
+# - Why this matters: Dashboard services depend on these loaders to keep storage
+#   assumptions centralized.
+
 """Data-access exports for the Flask dashboard."""
 
 from app.data_access.csv_reader import read_link_quality, read_processed_samples, read_raw_samples

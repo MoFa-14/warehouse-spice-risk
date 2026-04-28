@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for forecast test service behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import json
@@ -24,9 +33,28 @@ from app.services.forecast_test_service import (
     _summarize_continuous_sessions,
     build_pod1_forecast_test_context,
 )
-
+# Class purpose: Groups related regression checks for ForecastTestService behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class ForecastTestServiceTests(unittest.TestCase):
+    # Test purpose: Verifies that select best session prefers long clean session
+    #   with completed windows behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastTestServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_select_best_session_prefers_long_clean_session_with_completed_windows(self) -> None:
         session_a = pd.date_range("2026-04-22T08:00:00Z", periods=40, freq="min")
         session_b = pd.date_range("2026-04-22T10:00:00Z", periods=196, freq="min")
@@ -61,6 +89,16 @@ class ForecastTestServiceTests(unittest.TestCase):
         self.assertEqual(session.end_utc, session_b[-1].to_pydatetime())
         self.assertEqual(session.completed_window_count, 3)
         self.assertEqual(session.grid_point_count, 196)
+    # Test purpose: Verifies that session summary prefers lower gap rate when
+    #   duration matches behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastTestServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_session_summary_prefers_lower_gap_rate_when_duration_matches(self) -> None:
         clean = pd.date_range("2026-04-22T08:00:00Z", periods=121, freq="min")
@@ -84,6 +122,17 @@ class ForecastTestServiceTests(unittest.TestCase):
         self.assertEqual(len(sessions), 2)
         self.assertLess(sessions[0].gap_rate, sessions[1].gap_rate)
         self.assertEqual(sessions[0].duration, sessions[1].duration)
+    # Test purpose: Verifies that reconstruct attempt series uses full history
+    #   window and persistence anchor behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastTestServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_reconstruct_attempt_series_uses_full_history_window_and_persistence_anchor(self) -> None:
         timestamps = pd.date_range("2026-04-23T00:00:00Z", periods=260, freq="min")
@@ -116,6 +165,17 @@ class ForecastTestServiceTests(unittest.TestCase):
         self.assertEqual(series.future_times_utc[0], datetime(2026, 4, 23, 3, 1, tzinfo=timezone.utc))
         self.assertTrue(all(value == 23.6 for value in series.persistence_temp_c))
         self.assertTrue(all(value == 46.0 for value in series.persistence_rh_pct))
+    # Test purpose: Verifies that build pod1 forecast test context loads
+    #   requested completed attempt behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastTestServiceTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_build_pod1_forecast_test_context_loads_requested_completed_attempt(self) -> None:
         temp_parent = WORKSPACE_ROOT / ".tmp-tests"
@@ -150,6 +210,18 @@ class ForecastTestServiceTests(unittest.TestCase):
             self.assertIn("Historical forecast vs actual for the selected completed window", context.detail_chart)
         finally:
             shutil.rmtree(temp_root, ignore_errors=True)
+    # Method purpose: Creates forecast test fixture in the form expected by
+    #   later code.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on ForecastTestServiceTests.
+    # - Inputs: Arguments such as base, interpreted according to the rules
+    #   encoded in the body below.
+    # - Outputs: Returns tuple[Path, Path] when the function completes
+    #   successfully.
+    # - Important decisions: Historical fixes and future refactors both depend
+    #   on this coverage staying explicit.
+    # - Related flow: Calls runtime helpers or routes and asserts expected
+    #   outcomes.
 
     @staticmethod
     def _create_forecast_test_fixture(base: Path) -> tuple[Path, Path]:

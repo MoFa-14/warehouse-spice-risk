@@ -1,3 +1,12 @@
+# File overview:
+# - Responsibility: Provides regression coverage for kNN forecast behavior.
+# - Project role: Keeps runtime behavior executable and checkable through automated
+#   scenarios.
+# - Main data or concerns: Fixture data, expected outputs, and regression scenarios.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
+# - Why this matters: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+
 from __future__ import annotations
 
 import unittest
@@ -9,9 +18,28 @@ from forecasting.features import extract_feature_vector
 from forecasting.knn_forecaster import AnalogueKNNForecaster, _aggregate_neighbors
 from forecasting.models import CaseRecord
 from forecasting.utils import rmse
-
+# Class purpose: Groups related regression checks for KnnForecast behavior.
+# - Project role: Belongs to the test and regression coverage and groups related
+#   state or behavior behind one explicit interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Important decisions: Historical fixes and future refactors both depend on this
+#   coverage staying explicit.
+# - Related flow: Calls runtime helpers or routes and asserts expected outcomes.
 
 class KnnForecastTests(unittest.TestCase):
+    # Test purpose: Verifies that kNN forecast reanchors neighbor deltas for
+    #   temperature and humidity behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on KnnForecastTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
+
     def test_knn_forecast_reanchors_neighbor_deltas_for_temperature_and_humidity(self) -> None:
         baseline_window = synthetic_window(
             temp_base=30.0,
@@ -63,6 +91,16 @@ class KnnForecastTests(unittest.TestCase):
         self.assertAlmostEqual(forecast.rh_forecast_pct[5], 49.5, places=6)
         self.assertLessEqual(forecast.temp_p25_c[0], forecast.temp_forecast_c[0])
         self.assertGreaterEqual(forecast.temp_p75_c[0], forecast.temp_forecast_c[0])
+    # Test purpose: Verifies that kNN forecast avoids absolute level jump from
+    #   misaligned neighbors behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on KnnForecastTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_knn_forecast_avoids_absolute_level_jump_from_misaligned_neighbors(self) -> None:
         baseline_window = synthetic_window(
@@ -108,6 +146,17 @@ class KnnForecastTests(unittest.TestCase):
         self.assertAlmostEqual(forecast.rh_forecast_pct[0], 33.25, places=6)
         self.assertNotAlmostEqual(forecast.temp_forecast_c[0], 35.5, places=6)
         self.assertNotAlmostEqual(forecast.rh_forecast_pct[0], 55.25, places=6)
+    # Test purpose: Verifies that kNN forecast rejects wrong RH regime and
+    #   blends weak support toward persistence behaves as expected under this
+    #   regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on KnnForecastTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_knn_forecast_rejects_wrong_rh_regime_and_blends_weak_support_toward_persistence(self) -> None:
         baseline_window = synthetic_window(
@@ -149,6 +198,16 @@ class KnnForecastTests(unittest.TestCase):
         self.assertAlmostEqual(forecast.rh_forecast_pct[0], 35.15, places=6)
         self.assertLess(forecast.rh_forecast_pct[0], 36.0)
         self.assertIn("blended RH toward persistence", forecast.notes)
+    # Test purpose: Verifies that kNN forecast prefers more recent similar case
+    #   behaves as expected under this regression scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on KnnForecastTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_knn_forecast_prefers_more_recent_similar_case(self) -> None:
         baseline_window = synthetic_window(
@@ -184,6 +243,17 @@ class KnnForecastTests(unittest.TestCase):
 
         self.assertEqual(forecast.source, "analogue_knn")
         self.assertAlmostEqual(forecast.rh_forecast_pct[0], 35.2, places=6)
+    # Test purpose: Verifies that kNN forecast falls back to persistence when
+    #   all cases are wrong RH regime behaves as expected under this regression
+    #   scenario.
+    # - Project role: Belongs to the test and regression coverage and acts as a
+    #   method on KnnForecastTests.
+    # - Inputs: No explicit arguments beyond module or instance context.
+    # - Outputs: No direct return value; failures surface through assertions.
+    # - Important decisions: Keeps one concrete regression scenario executable
+    #   so later refactors can be checked automatically.
+    # - Related flow: Executes runtime code under a controlled scenario and
+    #   checks the expected branch, value, or data contract.
 
     def test_knn_forecast_falls_back_to_persistence_when_all_cases_are_wrong_rh_regime(self) -> None:
         baseline_window = synthetic_window(

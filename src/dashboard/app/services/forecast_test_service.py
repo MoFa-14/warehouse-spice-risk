@@ -1,13 +1,31 @@
-"""Historical Pod 1 forecasting test views for the prediction dashboard.
+# File overview:
+# - Responsibility: Historical Pod 1 forecast-test views for the prediction
+#   dashboard.
+# - Project role: Builds route-ready view models, summaries, and chart inputs from
+#   loaded data.
+# - Main data or concerns: View models, chart series, thresholds, and
+#   display-oriented summaries.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
-This module exists to answer a viva-style question that the live forecast view
-cannot answer by itself:
+"""Historical Pod 1 forecast-test views for the prediction dashboard.
 
-"Can we inspect a meaningful past period, see what the model predicted, and
-compare that directly with what really happened afterward?"
+Responsibilities:
+- Builds the dedicated historical forecast-analysis card shown beside the live
+  prediction view.
+- Selects one suitable continuous Pod 1 session, locates completed forecast
+  attempts inside that session, and reconstructs the comparison series needed
+  for charting.
 
-The service therefore builds the dedicated ``Pod 1 Forecasting Test`` card,
-which is intentionally separate from the live/latest forecast display.
+Project flow:
+- stored raw telemetry + stored forecasts + stored evaluations -> selected
+  historical session -> reconstructed comparison series -> dashboard test card
+
+Why this matters:
+- The live prediction view shows only the newest forecast.
+- This module exposes a completed historical example where input history,
+  forecast, persistence baseline, and realised outcome can be inspected
+  together.
 """
 
 from __future__ import annotations
@@ -35,6 +53,17 @@ FORECAST_HORIZON_MINUTES = 30
 SESSION_BREAK_THRESHOLD = EXPECTED_SAMPLE_INTERVAL * 2
 
 
+# Class purpose: One selectable completed forecast attempt within the chosen
+#   session.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 @dataclass(frozen=True)
 class ForecastTestAttemptOption:
     """One selectable completed forecast attempt within the chosen session."""
@@ -43,6 +72,17 @@ class ForecastTestAttemptOption:
     label: str
     selected: bool
 
+
+# Class purpose: Summary of one continuous historical session judged suitable for
+#   analysis.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 @dataclass(frozen=True)
 class ForecastTestSession:
@@ -56,6 +96,17 @@ class ForecastTestSession:
     gap_rate: float
     cadence_mad_seconds: float
 
+
+# Class purpose: All series needed to compare one stored forecast attempt with
+#   reality.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 @dataclass(frozen=True)
 class ForecastAttemptSeries:
@@ -73,6 +124,17 @@ class ForecastAttemptSeries:
     anchor_temp_c: float
     anchor_rh_pct: float
 
+
+# Class purpose: Full view model consumed by the historical forecast-test dashboard
+#   card.
+# - Project role: Belongs to the dashboard service and presentation layer and groups
+#   related behavior behind one stateful interface.
+# - Inputs: Initialization parameters and later method calls defined on the class.
+# - Outputs: Instances that hold state and expose related methods for later calls.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 @dataclass(frozen=True)
 class PodForecastTestView:
@@ -104,6 +166,25 @@ class PodForecastTestView:
     uses_reconstructed_persistence: bool
 
 
+# Historical forecast-test context builder
+# - Purpose: assembles the full dashboard view model for the dedicated Pod 1
+#   historical forecast-analysis card.
+# - Project role: top-level service entry point for completed-forecast
+#   inspection.
+# - Outputs: one ``PodForecastTestView`` containing session summaries,
+#   selectable attempts, comparison metrics, and charts.
+# Function purpose: Build the historical forecast-analysis card for Pod 1.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, db_path, display_timezone,
+#   selected_attempt_ts, interpreted according to the implementation below.
+# - Outputs: Returns PodForecastTestView | None when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def build_pod1_forecast_test_context(
     data_root: Path,
     *,
@@ -111,17 +192,7 @@ def build_pod1_forecast_test_context(
     display_timezone: tzinfo | None = None,
     selected_attempt_ts: str | None = None,
 ) -> PodForecastTestView | None:
-    """Build the historical forecast-analysis card for Pod 1.
-
-    This is the top-level dashboard entry point for the forecasting test card.
-    The method:
-    1. loads stored Pod 1 readings
-    2. identifies the most useful continuous session
-    3. chooses one representative completed forecast attempt inside that session
-    4. reconstructs the surrounding history, actual future, and persistence
-       baseline
-    5. builds the charts and summary metadata shown in the dashboard
-    """
+    """Build the historical forecast-analysis card for Pod 1."""
     resolved_display_timezone = display_timezone or timezone.utc
     raw_frame = _load_raw_frame(Path(data_root), pod_id=FORECAST_TEST_POD_ID, db_path=db_path)
     if raw_frame.empty:
@@ -223,18 +294,31 @@ def build_pod1_forecast_test_context(
     )
 
 
+# Completed-attempt loader
+# - Purpose: returns stored baseline forecast rows that already have completed
+#   evaluations.
+# - Project role: historical evidence read path for the test card.
+# - Important decision: only completed windows are eligible, so every selected
+#   attempt has both stored prediction output and realised outcome metrics.
+# Function purpose: Load baseline forecast attempts that also have completed
+#   evaluations.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, raw_frame, db_path, interpreted according
+#   to the implementation below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _load_completed_attempts(
     data_root: Path,
     *,
     raw_frame: pd.DataFrame,
     db_path: Path | None,
 ) -> pd.DataFrame:
-    """Load baseline forecast attempts that also have completed evaluations.
-
-    The historical test card is deliberately evidence-based. It only uses
-    windows where both the stored forecast and the later realised outcome are
-    available.
-    """
+    """Load baseline forecast attempts that also have completed evaluations."""
     window_start = _to_utc_iso(raw_frame["ts_pc_utc"].min().to_pydatetime())
     window_end = _to_utc_iso(raw_frame["ts_pc_utc"].max().to_pydatetime() + EXPECTED_SAMPLE_INTERVAL)
     forecasts = read_forecasts_in_window(
@@ -301,15 +385,26 @@ def _load_completed_attempts(
     return completed.sort_values("ts_pc_utc", kind="mergesort").reset_index(drop=True)
 
 
-def _select_best_session(minute_frame: pd.DataFrame, attempts: pd.DataFrame) -> ForecastTestSession | None:
-    """Choose the most useful continuous Pod 1 session for explanation/debugging.
+# Session selection
+# - Purpose: ranks candidate continuous sessions and chooses the strongest one
+#   for the historical card.
+# - Important decisions: favours sessions with more completed forecast windows,
+#   then longer duration, fewer gaps, and more regular cadence.
+# Function purpose: Choose the most useful continuous Pod 1 session for
+#   explanation/debugging.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as minute_frame, attempts, interpreted according to the
+#   implementation below.
+# - Outputs: Returns ForecastTestSession | None when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
-    The ranking favours:
-    - sessions with more completed forecast windows
-    - longer duration
-    - fewer gaps
-    - more regular cadence
-    """
+def _select_best_session(minute_frame: pd.DataFrame, attempts: pd.DataFrame) -> ForecastTestSession | None:
+    """Choose the most useful continuous Pod 1 session for explanation/debugging."""
     sessions = _summarize_continuous_sessions(minute_frame, attempts)
     if not sessions:
         return None
@@ -327,14 +422,32 @@ def _select_best_session(minute_frame: pd.DataFrame, attempts: pd.DataFrame) -> 
     )
 
 
+# Continuous-session summarisation
+# - Purpose: partitions the minute grid into continuous sessions and computes
+#   the quality signals later used for ranking.
+# - Outputs: session start/end bounds, duration, gap rate, cadence deviation,
+#   and completed forecast count.
+# Function purpose: Split the minute grid into continuous sessions and score each
+#   one.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as minute_frame, attempts, interpreted according to the
+#   implementation below.
+# - Outputs: Returns list[ForecastTestSession] when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _summarize_continuous_sessions(minute_frame: pd.DataFrame, attempts: pd.DataFrame) -> list[ForecastTestSession]:
     """Split the minute grid into continuous sessions and score each one."""
     if minute_frame.empty:
         return []
 
     ordered = minute_frame.sort_values("ts_pc_utc", kind="mergesort").reset_index(drop=True).copy()
-    # A new session starts when the minute-level continuity expected by the
-    # forecasting pipeline is broken for longer than the allowed threshold.
+    # Session boundaries follow the same minute-level continuity assumption used
+    # by the forecasting pipeline: a large enough gap starts a new session.
     session_breaks = ordered["ts_pc_utc"].diff().gt(pd.Timedelta(SESSION_BREAK_THRESHOLD)).fillna(False)
     ordered["session_id"] = session_breaks.cumsum()
 
@@ -371,18 +484,31 @@ def _summarize_continuous_sessions(minute_frame: pd.DataFrame, attempts: pd.Data
     return sessions
 
 
+# Function purpose: Choose the forecast attempt to show by default inside the chosen
+#   session.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as attempts, selected_attempt_ts, session, interpreted
+#   according to the implementation below.
+# - Outputs: Returns the value or side effect defined by the implementation.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _select_attempt(
     attempts: pd.DataFrame,
     *,
     selected_attempt_ts: str | None,
     session: ForecastTestSession,
 ):
-    """Choose the forecast attempt to show by default inside the chosen session.
-
-    If the user has not picked a specific attempt, the service prefers a window
-    near the middle of the session with lower missing-rate and without a large
-    error flag, so the default example is easier to discuss.
-    """
+    # Attempt selection
+    # - Purpose: chooses which completed forecast attempt to display inside the
+    #   selected session.
+    # - Important decision: when no explicit attempt is requested, the ranking
+    #   prefers lower missing-rate, no large-error flag, and a timestamp near
+    #   the session midpoint.
+    """Choose the forecast attempt to show by default inside the chosen session."""
     if attempts.empty:
         return None
 
@@ -406,12 +532,28 @@ def _select_attempt(
     return ranked.iloc[0]
 
 
+# Function purpose: Build the selector options that let the user move across
+#   completed attempts.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as session_attempts, selected_timestamp,
+#   display_timezone, interpreted according to the implementation below.
+# - Outputs: Returns list[ForecastTestAttemptOption] when the function completes
+#   successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _build_attempt_options(
     *,
     session_attempts: pd.DataFrame,
     selected_timestamp: datetime,
     display_timezone: tzinfo,
 ) -> list[ForecastTestAttemptOption]:
+    # Attempt selector options
+    # - Purpose: builds the ordered dropdown/navigation options for completed
+    #   forecast attempts inside the selected session.
     """Build the selector options that let the user move across completed attempts."""
     options: list[ForecastTestAttemptOption] = []
     for _, row in session_attempts.sort_values("ts_pc_utc", kind="mergesort").iterrows():
@@ -431,18 +573,27 @@ def _build_attempt_options(
     return options
 
 
-def _reconstruct_attempt_series(minute_frame: pd.DataFrame, attempt) -> ForecastAttemptSeries:
-    """Reconstruct history, actual future, and persistence around one stored attempt.
+# Attempt-series reconstruction
+# - Purpose: rebuilds the model-input history, realised future, and persistence
+#   baseline surrounding one completed forecast attempt.
+# - Project role: bridge between stored summary rows and the detailed historical
+#   comparison chart.
+# - Downstream dependency: the detailed forecast-vs-actual chart consumes this
+#   structure directly.
+# Function purpose: Reconstruct history, actual future, and persistence around one
+#   stored attempt.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as minute_frame, attempt, interpreted according to the
+#   implementation below.
+# - Outputs: Returns ForecastAttemptSeries when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
-    The stored forecast row contains the model output and the forecast anchor,
-    but not a ready-made side-by-side comparison series. This helper rebuilds
-    that comparison from the minute-level telemetry so the chart can show:
-    - 3-hour model input history
-    - the anchor point
-    - forecast path
-    - actual next 30 minutes
-    - persistence baseline
-    """
+def _reconstruct_attempt_series(minute_frame: pd.DataFrame, attempt) -> ForecastAttemptSeries:
+    """Reconstruct history, actual future, and persistence around one stored attempt."""
     ts_forecast_utc = attempt["ts_pc_utc"].to_pydatetime()
     history_start = ts_forecast_utc - timedelta(minutes=FORECAST_HISTORY_MINUTES - 1)
     future_start = ts_forecast_utc + EXPECTED_SAMPLE_INTERVAL
@@ -473,6 +624,17 @@ def _reconstruct_attempt_series(minute_frame: pd.DataFrame, attempt) -> Forecast
     )
 
 
+# Function purpose: Build the overview plot of the chosen historical Pod 1 session.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as minute_frame, attempts, session, selected_attempt_ts,
+#   display_timezone, interpreted according to the implementation below.
+# - Outputs: Returns str | None when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _build_session_overview_chart(
     *,
     minute_frame: pd.DataFrame,
@@ -481,6 +643,9 @@ def _build_session_overview_chart(
     selected_attempt_ts: datetime,
     display_timezone: tzinfo,
 ) -> str | None:
+    # Session overview chart
+    # - Purpose: visualises the chosen continuous session and marks where
+    #   completed forecast attempts occurred within it.
     """Build the overview plot of the chosen historical Pod 1 session."""
     session_frame = minute_frame[
         minute_frame["ts_pc_utc"].between(pd.Timestamp(session.start_utc), pd.Timestamp(session.end_utc), inclusive="both")
@@ -512,9 +677,8 @@ def _build_session_overview_chart(
         )
     )
 
-    # Forecast markers are placed on top of the telemetry session so the user
-    # can see where completed forecast attempts sit within the longer operating
-    # period.
+    # Forecast markers are drawn on top of the telemetry session so the chart
+    # shows where completed attempts sit within the longer operating period.
     attempt_lookup = session_frame.set_index("ts_pc_utc")
     attempt_times: list[datetime] = []
     attempt_temps: list[float] = []
@@ -580,22 +744,31 @@ def _build_session_overview_chart(
     return figure.to_html(full_html=False, include_plotlyjs=False, config=_plotly_chart_config())
 
 
+# Function purpose: Build the detailed forecast-vs-actual chart for one completed
+#   attempt.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as attempt, attempt_series, display_timezone, interpreted
+#   according to the implementation below.
+# - Outputs: Returns str | None when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _build_forecast_detail_chart(
     *,
     attempt,
     attempt_series: ForecastAttemptSeries,
     display_timezone: tzinfo,
 ) -> str | None:
-    """Build the detailed forecast-vs-actual chart for one completed attempt.
-
-    This chart is intentionally pedagogical. It shows the chain of evidence a
-    supervisor typically wants to see:
-    - what the input history looked like
-    - where the anchor point was
-    - what the model predicted next
-    - what actually happened
-    - how a persistence baseline would have behaved
-    """
+    # Detailed comparison chart
+    # - Purpose: shows the full evidence chain for one completed forecast
+    #   attempt.
+    # - Inputs: reconstructed input history, stored model forecast, realised
+    #   future, and persistence baseline.
+    # - Outputs: one two-panel Plotly chart for temperature and RH.
+    """Build the detailed forecast-vs-actual chart for one completed attempt."""
     if not attempt_series.history_times_utc or not attempt_series.future_times_utc:
         return None
 
@@ -611,6 +784,17 @@ def _build_forecast_detail_chart(
         vertical_spacing=0.12,
         subplot_titles=("Temperature", "Relative Humidity"),
     )
+
+    # Function purpose: Handles line for the surrounding project flow.
+    # - Project role: Belongs to the dashboard service and presentation layer
+    #   and contributes one focused step within that subsystem.
+    # - Inputs: Arguments such as values, anchor_value, interpreted according to
+    #   the implementation below.
+    # - Outputs: Returns list[float] when the function completes successfully.
+    # - Design reason: Service-layer code keeps presentation decisions separate
+    #   from raw data loading and lower-level runtime logic.
+    # - Related flow: Consumes dashboard data-access outputs and passes rendered
+    #   context to the Flask routes and templates.
 
     def _future_line(values: list[float], anchor_value: float) -> list[float]:
         return [anchor_value, *values]
@@ -778,6 +962,23 @@ def _build_forecast_detail_chart(
     return figure.to_html(full_html=False, include_plotlyjs=False, config=_plotly_chart_config())
 
 
+# Minute-frame aggregation
+# - Purpose: collapses raw readings onto the same minute grid used by the
+#   forecasting pipeline.
+# - Project role: first preparation step before session detection and attempt
+#   reconstruction.
+# Function purpose: Collapse raw readings to the minute grid used by the forecasting
+#   pipeline.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as raw_frame, interpreted according to the implementation
+#   below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _aggregate_minute_frame(raw_frame: pd.DataFrame) -> pd.DataFrame:
     """Collapse raw readings to the minute grid used by the forecasting pipeline."""
     if raw_frame.empty:
@@ -803,18 +1004,29 @@ def _aggregate_minute_frame(raw_frame: pd.DataFrame) -> pd.DataFrame:
     return aggregated
 
 
+# Historical minute-grid reconstruction
+# - Purpose: rebuilds a contiguous minute-level grid for the selected history or
+#   future window.
+# - Design reason: the historical card should use the same temporal basis as the
+#   forecast model so the comparison remains structurally faithful.
+# Function purpose: Rebuild a contiguous minute-level grid for historical charting.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as minute_frame, start_utc, periods, interpreted
+#   according to the implementation below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _resample_minute_grid(
     minute_frame: pd.DataFrame,
     *,
     start_utc: datetime,
     periods: int,
 ) -> pd.DataFrame:
-    """Rebuild a contiguous minute-level grid for historical charting.
-
-    This mirrors the forecasting pipeline's own 1-minute view of the world so
-    the historical card shows the data on the same temporal basis used by the
-    model.
-    """
+    """Rebuild a contiguous minute-level grid for historical charting."""
     if minute_frame.empty or periods <= 0:
         return pd.DataFrame(columns=["ts_pc_utc", "temp_c", "rh_pct", "dew_point_c", "observed"])
 
@@ -833,6 +1045,21 @@ def _resample_minute_grid(
     return result[["ts_pc_utc", "temp_c", "rh_pct", "dew_point_c", "observed"]]
 
 
+# Raw-frame loader
+# - Purpose: loads raw telemetry for the historical test card from SQLite when
+#   available, otherwise from canonical raw files.
+# Function purpose: Load Pod telemetry from SQLite when available, otherwise from
+#   raw files.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as data_root, pod_id, db_path, interpreted according to
+#   the implementation below.
+# - Outputs: Returns pd.DataFrame when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _load_raw_frame(data_root: Path, *, pod_id: str, db_path: Path | None) -> pd.DataFrame:
     """Load Pod telemetry from SQLite when available, otherwise from raw files."""
     if db_path is not None and sqlite_db_exists(db_path):
@@ -840,12 +1067,35 @@ def _load_raw_frame(data_root: Path, *, pod_id: str, db_path: Path | None) -> pd
     return read_raw_samples(find_raw_pod_files(data_root, pod_id))
 
 
+# Function purpose: Convert optional scalar values into floats while tolerating
+#   missing values.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the implementation
+#   below.
+# - Outputs: Returns float | None when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _optional_float(value: object) -> float | None:
     """Convert optional scalar values into floats while tolerating missing values."""
     if value is None or pd.isna(value):
         return None
     return float(value)
 
+
+# Function purpose: Compute RMSE locally for reconstructed series when needed.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as predicted, actual, interpreted according to the
+#   implementation below.
+# - Outputs: Returns float when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _rmse(*, predicted: list[float], actual: list[float]) -> float:
     """Compute RMSE locally for reconstructed series when needed."""
@@ -856,10 +1106,33 @@ def _rmse(*, predicted: list[float], actual: list[float]) -> float:
     return (squared_error / float(count)) ** 0.5
 
 
+# Function purpose: Serialise a UTC timestamp in the repository's standard string
+#   form.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: Arguments such as value, interpreted according to the implementation
+#   below.
+# - Outputs: Returns str when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
+
 def _to_utc_iso(value: datetime) -> str:
     """Serialise a UTC timestamp in the repository's standard string form."""
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
+
+# Function purpose: Return the shared Plotly interaction settings used by the test
+#   card.
+# - Project role: Belongs to the dashboard service and presentation layer and
+#   contributes one focused step within that subsystem.
+# - Inputs: No explicit arguments beyond module or instance context.
+# - Outputs: Returns dict[str, object] when the function completes successfully.
+# - Design reason: Service-layer code keeps presentation decisions separate from raw
+#   data loading and lower-level runtime logic.
+# - Related flow: Consumes dashboard data-access outputs and passes rendered context
+#   to the Flask routes and templates.
 
 def _plotly_chart_config() -> dict[str, object]:
     """Return the shared Plotly interaction settings used by the test card."""
